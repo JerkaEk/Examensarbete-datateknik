@@ -1,0 +1,8 @@
+venv/
+venv2/
+__pycache__/
+*.pyc
+frames/
+frames_pair/
+camera_parameters/
+.python-version
