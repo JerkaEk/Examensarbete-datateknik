@@ -202,7 +202,20 @@ def generate_yaml(cam0: Dict, cam1: Dict, settings: Dict, output_path: str) -> N
   print(f"\n[INFO] Settings saved to '{output_path}'")
   print("[INFO] You can now run:")
   print(f"         python dynamic_cam_calibration.py {output_path}")
-
+  
+def load_yaml(path: str) -> Dict:
+  """
+  Reads calibration_settings.yaml.
+  Returns dict with values if found, empty dict if file doesn't exist.
+  """
+  try:
+      with open(path) as f:
+          data = yaml.safe_load(f)
+          print(f"[INFO] Loaded settings from '{path}'")
+          return data or {}
+  except FileNotFoundError:
+      print(f"[WARN] '{path}' not found, using defaults.")
+      return {}
 
 def main() -> None:
   print("=" * 50)
