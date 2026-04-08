@@ -4,7 +4,11 @@ import subprocess
 import yaml
 from typing import List, Dict
 
-from picamera2 import Picamera2
+try:
+  from picamera2 import Picamera2
+  HAS_PICAMERA = True
+except ImportError:
+  HAS_PICAMERA = False
 
 """
 Camera Detection
@@ -86,7 +90,7 @@ def detect_all_cameras() -> List[Dict]:
   
   if not all_cameras:
     print("[ERROR] No cameras found. Check connections and try again")
-    raise SystemExit(1)
+    return []
   
   print(f"[INFO] Found {len(all_cameras)} cameras:")
   for i, cam in enumerate(all_cameras):
