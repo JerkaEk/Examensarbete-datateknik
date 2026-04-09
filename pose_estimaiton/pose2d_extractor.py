@@ -92,7 +92,15 @@ class Pose2DEstimator:
         )
         
     def detect(self, frame: np.ndarray) -> np.ndarray:
+        h, w = frame.shape[:2]
+        landmarks = detect_landmarks(frame, self.pose)
+        if landmarks is None:
+            return np.full((33, 2), np.nan, dtype=np.float32)
+        return np.array([[lm["x"] * w, lm["y"] * h] for lm in landmarks],
+                        dtype=np.float32)
         
+    def close(self):
+        self.pose.close()
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
