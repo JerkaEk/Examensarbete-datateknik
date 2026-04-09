@@ -4,7 +4,11 @@ import subprocess
 import yaml
 from typing import List, Dict
 
-from picamera2 import Picamera2
+try:
+  from picamera2 import Picamera2
+  HAS_PICAMERA = True
+except ImportError:
+  HAS_PICAMERA = False
 
 """
 Camera Detection
@@ -86,7 +90,7 @@ def detect_all_cameras() -> List[Dict]:
   
   if not all_cameras:
     print("[ERROR] No cameras found. Check connections and try again")
-    raise SystemExit(1)
+    return []
   
   print(f"[INFO] Found {len(all_cameras)} cameras:")
   for i, cam in enumerate(all_cameras):
@@ -198,7 +202,20 @@ def generate_yaml(cam0: Dict, cam1: Dict, settings: Dict, output_path: str) -> N
   print(f"\n[INFO] Settings saved to '{output_path}'")
   print("[INFO] You can now run:")
   print(f"         python dynamic_cam_calibration.py {output_path}")
-
+  
+def load_yaml(path: str) -> Dict:
+  """
+  Reads calibration_settings.yaml.
+  Returns dict with values if found, empty dict if file doesn't exist.
+  """
+  try:
+      with open(path) as f:
+          data = yaml.safe_load(f)
+          print(f"[INFO] Loaded settings from '{path}'")
+          return data or {}
+  except FileNotFoundError:
+      print(f"[WARN] '{path}' not found, using defaults.")
+      return {}
 
 def main() -> None:
   print("=" * 50)

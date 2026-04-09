@@ -21,7 +21,12 @@ import cv2 as cv
 import numpy as np
 from typing import Dict, Tuple
 from scipy import linalg
-from picamera2 import Picamera2
+
+try:
+    from picamera2 import Picamera2
+    HAS_PICAMERA = True
+except ImportError:
+    HAS_PICAMERA = False
 
 # -----------------------------------------------------------------------------#
 # Global configuration (loaded from YAML)
@@ -144,14 +149,16 @@ def open_camera(camera_id, width=1920, height=1080):
     
   # Fallback to PiCam(CSI)
   if isinstance(camera_id, int):
+    if not HAS_PICAMERA:
+        print("[WARN] picamera2 not available, cannot open CSI camera")
+        return None
     try:
-      cap = PiCameraCapture(camera_id)
-      print(f"[CAM] Opened CSI Camera: {camera_id}")
-      return cap
+        cap = PiCameraCapture(camera_id)
+        return cap
     except Exception as e:
-      print(f"[CAM] PiCamera failed: {e}")
-  
-  sys.exit(f"[ERROR] could not open camera: {camera_id}")
+        print(f"[CAM] PiCamera failed: {e}")
+
+    sys.exit(f"[ERROR] could not open camera: {camera_id}")
 
 # -----------------------------------------------------------------------------#
 # Image capture — uses PiCameraCapture instead of cv.VideoCapture
@@ -224,8 +231,8 @@ def capture_stereo_pair(cam0: str, cam1: str) -> None:
     scale = calibration_settings["view_resize"]
     cooldown_default = calibration_settings["cooldown"]
 
-    cap0 = PiCameraCapture(calibration_settings[cam0], width=w, height=h)
-    cap1 = PiCameraCapture(calibration_settings[cam1], width=w, height=h)
+    cap0 = open_camera(calibration_settings[cam0], width=w, height=h)
+    cap1 = open_camera(calibration_settings[cam1], width=w, height=h)
 
     saved, cooldown, recording = 0, cooldown_default, False
 
@@ -420,8 +427,8 @@ def live_axis_overlay(
 
     w = calibration_settings["frame_width"]
     h = calibration_settings["frame_height"]
-    cap0 = PiCameraCapture(calibration_settings[cam0_key], width=w, height=h)
-    cap1 = PiCameraCapture(calibration_settings[cam1_key], width=w, height=h)
+    cap0 = open_camera(calibration_settings[cam0_key], width=w, height=h)
+    cap1 = open_camera(calibration_settings[cam1_key], width=w, height=h)
 
     colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]
 
@@ -447,6 +454,41 @@ def live_axis_overlay(
     cap0.release()
     cap1.release()
     cv.destroyAllWindows()
+    
+def run_calibration(settings_path: str = "calibration_settings.yaml") -> bool:
+  
+    try:
+        load_settings(settings_path)
+    except SystemExit as e:
+        print(f"[ERROR] Could not read settings: {e}")
+        return False
+
+    try:
+        capture_single_camera("camera0")
+        capture_single_camera("camera1")
+
+        K0, d0 = calibrate_intrinsics("frames/camera0*")
+        save_intrinsics(K0, d0, "camera0")
+
+        K1, d1 = calibrate_intrinsics("frames/camera1*")
+        save_intrinsics(K1, d1, "camera1")
+
+        capture_stereo_pair("camera0", "camera1")
+
+        R01, t01 = stereo_calibrate(
+            K0, d0, K1, d1,
+            "frames_pair/camera0*", "frames_pair/camera1*"
+        )
+
+        R0, t0 = np.eye(3, dtype=np.float32), np.zeros((3, 1), np.float32)
+        save_extrinsics(R0, t0, R01, t01)
+
+        print("[INFO] Calibration completed!")
+        return True
+
+    except Exception as e:
+        print(f"[ERROR] Calibration failed!: {e}")
+        return False
 
 
 # -----------------------------------------------------------------------------#
