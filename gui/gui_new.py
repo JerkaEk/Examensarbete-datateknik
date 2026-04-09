@@ -1,5 +1,4 @@
 import customtkinter as ctk
-import matplotlib as plt
 import matplotlib.pyplot as plt
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -7,14 +6,18 @@ from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
 from core.settings_config import CALIBRATION_SETTINGS
 
-# Themes
+# -------------------------------------------------- #
+# Themes & Size Settings
+# -------------------------------------------------- #
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 SETTINGS_PANEL_WIDTH = 320
 SETTINGS_PANEL_SLIDE_STEPS = 12
 SETTINGS_PANEL_DELAY=10
-
+# -------------------------------------------------- #
+# Main Window
+# -------------------------------------------------- #
 class MainWindow(ctk.CTk):
   def __init__(self, controller):
     super().__init__()
@@ -25,12 +28,20 @@ class MainWindow(ctk.CTk):
     #self.geometry("1280x720")
     self.minsize(800,500)
     
-    self._panel_open = False
-    self._panel_current_width = 0
+    self._camera_settings_panel_open = False
+    self._calibration_settings_panel_open = False
+    
+    self._camera_settings_built = False
+    self._calibration_settings_built = False
+    
+    self._available_cameras = []
     
     self._build_topbar()
     self._build_content()
     
+  # -------------------------------------------------- #
+  # Build Components
+  # -------------------------------------------------- #
   def _build_topbar(self):
     self.topbar = ctk.CTkFrame(self, height=48, corner_radius=0)
     self.topbar.pack(side="top", fill="x")
@@ -62,11 +73,15 @@ class MainWindow(ctk.CTk):
     self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
     self.content.pack(side="top", fill="both", expand=True, padx=8, pady=8)
     
-    self.settings_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
-    self.settings_panel.pack(side="left", fill="y")
-    self.settings_panel.pack_propagate(False)
-
-    self._build_calibration_settings_panel()
+    # Camera settings panel
+    self.camera_settings_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
+    self.camera_settings_panel.pack(side="left", fill="y")
+    self.camera_settings_panel.pack_propagate(False)
+    
+    # Calibration settings panel
+    self.calibration_settings_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
+    self.calibration_settings_panel.pack(side="left", fill="y")
+    self.calibration_settings_panel.pack_propagate(False)
     
     # Config rows: 3D-plotting 2x size of camera preview
     self.main = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent")
@@ -137,21 +152,24 @@ class MainWindow(ctk.CTk):
     )
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
     
+  # -------------------------------------------------- #
+  # Build Settings Panels
+  # -------------------------------------------------- #  
   def _build_calibration_settings_panel(self):
     # Title
     ctk.CTkLabel(
-      self.settings_panel,
+      self.calibration_settings_panel,
       text="Calibration settings",
       font=ctk.CTkFont(size=15, weight="bold"),
     ).pack(pady=(16, 8), padx=16, anchor="w")
 
-    ctk.CTkFrame(self.settings_panel, height=1, fg_color="gray30").pack(
+    ctk.CTkFrame(self.calibration_settings_panel, height=1, fg_color="gray30").pack(
       fill="x", padx=16, pady=(0, 12)
     )
 
     # Scrollable if window is too small
     self.settings_scroll = ctk.CTkScrollableFrame(
-      self.settings_panel, fg_color="transparent"
+      self.calibration_settings_panel, fg_color="transparent"
     )
     self.settings_scroll.pack(fill="both", expand=True, padx=8)
 
@@ -165,11 +183,11 @@ class MainWindow(ctk.CTk):
         tooltip=setting["tooltip"],
       )
 
-    ctk.CTkFrame(self.settings_panel, height=1, fg_color="gray30").pack(
+    ctk.CTkFrame(self.calibration_settings_panel, height=1, fg_color="gray30").pack(
       fill="x", padx=16, pady=(8, 0)
     )
 
-    btn_row = ctk.CTkFrame(self.settings_panel, fg_color="transparent")
+    btn_row = ctk.CTkFrame(self.calibration_settings_panel, fg_color="transparent")
     btn_row.pack(fill="x", padx=16, pady=12)
 
     ctk.CTkButton(
@@ -185,7 +203,99 @@ class MainWindow(ctk.CTk):
       hover_color="gray40",
       command=self._on_settings_cancel,
     ).pack(side="left", expand=True, fill="x", padx=(4, 0))
- 
+    
+  def _build_camera_settings_panel(self):
+    ctk.CTkLabel(
+      self.camera_settings_panel,
+      text="Camera settings",
+      font=ctk.CTkFont(size=15, weight="bold"),
+    ).pack(pady=(16, 8), padx=16, anchor="w")
+
+    ctk.CTkFrame(self.camera_settings_panel, height=1, fg_color="gray30").pack(
+      fill="x", padx=16, pady=(0, 12)
+    )
+
+    # Scan button
+    self.btn_scan = ctk.CTkButton(
+      self.camera_settings_panel,
+      text="Scan for cameras",
+      command=self._on_scan_cameras,
+    )
+    self.btn_scan.pack(padx=16, pady=(0, 8), fill="x")
+
+    # Status label
+    self.scan_status = ctk.CTkLabel(
+      self.camera_settings_panel,
+      text="Press scan to detect cameras",
+      text_color="gray50",
+      font=ctk.CTkFont(size=12),
+      wraplength=SETTINGS_PANEL_WIDTH - 40,
+    )
+    self.scan_status.pack(padx=16, anchor="w")
+
+    ctk.CTkFrame(self.camera_settings_panel, height=1, fg_color="gray30").pack(
+      fill="x", padx=16, pady=12
+    )
+
+    # Cam 0 dropdown
+    ctk.CTkLabel(
+      self.camera_settings_panel,
+      text="Camera 0",
+      font=ctk.CTkFont(size=12),
+      anchor="w",
+    ).pack(padx=16, anchor="w")
+
+    self.cam0_var = ctk.StringVar(value="No cameras detected")
+    self.cam0_dropdown = ctk.CTkOptionMenu(
+      self.camera_settings_panel,
+      variable=self.cam0_var,
+      values=["No cameras detected"],
+      state="disabled",
+    )
+    self.cam0_dropdown.pack(padx=16, pady=(4, 12), fill="x")
+
+    # Cam 1 dropdown
+    ctk.CTkLabel(
+      self.camera_settings_panel,
+      text="Camera 1",
+      font=ctk.CTkFont(size=12),
+      anchor="w",
+    ).pack(padx=16, anchor="w")
+
+    self.cam1_var = ctk.StringVar(value="No cameras detected")
+    self.cam1_dropdown = ctk.CTkOptionMenu(
+      self.camera_settings_panel,
+      variable=self.cam1_var,
+      values=["No cameras detected"],
+      state="disabled",
+    )
+    self.cam1_dropdown.pack(padx=16, pady=(4, 0), fill="x")
+
+    # Save / Cancel
+    ctk.CTkFrame(self.camera_settings_panel, height=1, fg_color="gray30").pack(
+      fill="x", padx=16, pady=(16, 0)
+    )
+
+    btn_row = ctk.CTkFrame(self.camera_settings_panel, fg_color="transparent")
+    btn_row.pack(fill="x", padx=16, pady=12)
+
+    ctk.CTkButton(
+        btn_row,
+        text="Save",
+        command=self._on_camera_save,
+    ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+    ctk.CTkButton(
+        btn_row,
+        text="Cancel",
+        fg_color="gray30",
+        hover_color="gray40",
+        command=self._on_camera_cancel,
+    ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+      
+  # -------------------------------------------------- #
+  # Utility for Settings Panels
+  # -------------------------------------------------- #
   def _add_setting_row(self, label: str, key: str, default: str, tooltip: str):
     row = ctk.CTkFrame(self.settings_scroll, fg_color="transparent")
     row.pack(fill="x", pady=4)
@@ -221,6 +331,14 @@ class MainWindow(ctk.CTk):
 
     def on_enter(event):
       nonlocal tooltip_win
+      
+      # Destroy old tooltip if already exists
+      if tooltip_win is not None:
+        try:
+          tooltip_win.destroy()
+        except Exception:
+          pass
+      
       x = widget.winfo_rootx() + 20
       y = widget.winfo_rooty() + 20
       tooltip_win = ctk.CTkToplevel(self)
@@ -244,16 +362,105 @@ class MainWindow(ctk.CTk):
 
     widget.bind("<Enter>", on_enter)
     widget.bind("<Leave>", on_leave)
+    
+  def _on_scan_cameras(self):
+    """Detect cameras and populate dropdowns."""
+    self.scan_status.configure(text="Scanning...", text_color="gray50")
+    self.update()
 
-  # Button Events
+    # Import here to avoid issues on Windows
+    from calibration.auto_settings import detect_all_cameras
+    cameras = detect_all_cameras()
+
+    if not cameras:
+      self.scan_status.configure(
+        text="No cameras found. Check connections.",
+        text_color="red"
+      )
+      return
+
+    self._available_cameras = cameras
+    display_names = [c["display"] for c in cameras]
+
+    self.cam0_dropdown.configure(values=display_names, state="normal")
+    self.cam1_dropdown.configure(values=display_names, state="normal")
+
+    # Auto-select if exactly 2 found
+    self.cam0_var.set(display_names[0])
+    self.cam1_var.set(display_names[1] if len(display_names) > 1 else display_names[0])
+
+    self.scan_status.configure(
+      text=f"Found {len(cameras)} camera(s).",
+      text_color="green"
+    )
+  
+  def _on_camera_save(self):
+    """Save selected cameras to yaml via controller."""
+    if not self._available_cameras:
+      self.scan_status.configure(
+        text="Scan for cameras first.",
+        text_color="red"
+      )
+      return
+
+    # Find selected camera dicts by display name
+    cam0_display = self.cam0_var.get()
+    cam1_display = self.cam1_var.get()
+
+    cam0 = next((c for c in self._available_cameras if c["display"] == cam0_display), None)
+    cam1 = next((c for c in self._available_cameras if c["display"] == cam1_display), None)
+
+    if cam0 is None or cam1 is None:
+      self.scan_status.configure(text="Invalid selection.", text_color="red")
+      return
+
+    if cam0["id"] == cam1["id"]:
+      self.scan_status.configure(
+        text="Camera 0 and Camera 1 must be different.",
+        text_color="red"
+      )
+      return
+
+    # TODO: send to controller → generate_yaml()
+    print(f"[CAM] Selected cam0: {cam0['display']}, cam1: {cam1['display']}")
+
+    self._camera_settings_panel_open = False
+    self._set_panel(self.camera_settings_panel, False)
+
+  def _on_camera_cancel(self):
+    self._camera_settings_panel_open = False
+    self._set_panel(self.camera_settings_panel, False)
+    
+  
+  # -------------------------------------------------- #
+  # Panel Control
+  # -------------------------------------------------- #
+  def _set_panel(self, panel, open: bool):
+    target = SETTINGS_PANEL_WIDTH if open else 0
+    self.canvas.get_tk_widget().pack_forget()  # Hide canvas
+    panel.configure(width=target)
+    self.update()
+    self.canvas.get_tk_widget().pack(fill="both", expand=True)  # Show canvas
+  
   def _on_camera_settings(self):
     print("Camera settings clicked")
-    # TODO: implement
+    self._camera_settings_panel_open = not self._camera_settings_panel_open
+    if self._camera_settings_panel_open and not self._camera_settings_built:
+      self._build_camera_settings_panel()
+      self._camera_settings_built = True
+    self._set_panel(self.camera_settings_panel, self._camera_settings_panel_open)
     
   def _on_calibration_settings(self):
     print("Calibration settings clicked")
-    self._panel_open = not self._panel_open
-    self._slide_panel(opening=self._panel_open)
+    self._calibration_settings_panel_open = not self._calibration_settings_panel_open
+    if self._calibration_settings_panel_open and not self._calibration_settings_built:
+      self._build_calibration_settings_panel()
+      self._calibration_settings_built = True
+    self._set_panel(self.calibration_settings_panel, self._calibration_settings_panel_open)
+    
+  # -------------------------------------------------- #
+  # Button Events
+  # -------------------------------------------------- #
   
   def _on_calibrate(self):
     print ("Calibrate clicked")
@@ -265,16 +472,17 @@ class MainWindow(ctk.CTk):
     
   def _on_settings_save(self):
     values = {key: entry.get() for key, entry in self._settings_fields.items()}
-    print("Sparar inställningar:", values)
-    # TODO: skicka till controller → generate_yaml()
-    self._panel_open = False
-    self._slide_panel(opening=False)
+    print("Saving settings:", values)
+    self._calibration_settings_panel_open = False
+    self._set_panel(self.calibration_settings_panel, False)
 
   def _on_settings_cancel(self):
-    self._panel_open = False
-    self._slide_panel(opening=False)
-    
+    self._calibration_settings_panel_open = False
+    self._set_panel(self.calibration_settings_panel, False)
+  
+  # -------------------------------------------------- # 
   # Public API
+  # -------------------------------------------------- #
   def update_cam0(self, image):
     self.cam0_label.configure(image=image, text="")
     
@@ -298,7 +506,9 @@ class MainWindow(ctk.CTk):
     print(f"[ERROR] {message}")
     # TODO: visa i GUI
   
+  # -------------------------------------------------- #
   # Styling
+  # -------------------------------------------------- #
   def _style_3d_axes(self):
     self.ax.set_facecolor("#2b2b2b")
     self.ax.xaxis.pane.fill = False
@@ -315,14 +525,9 @@ class MainWindow(ctk.CTk):
     self.ax.set_ylabel("Y")
     self.ax.set_zlabel("Z")
     
-  def _slide_panel(self, opening: bool):
-    target = SETTINGS_PANEL_WIDTH if opening else 0
-    self._panel_current_width = float(target)
-    self.settings_panel.configure(width=target)
-    
   def run(self):
     self.mainloop()
     
 if __name__ == "__main__":
-  window = MainWindow()
+  window = MainWindow(controller=None)
   window.run()
