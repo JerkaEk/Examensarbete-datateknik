@@ -16,6 +16,7 @@ from pathlib import Path
 import cv2 as cv
 import mediapipe as mp
 from typing import List, Dict
+import numpy as np
 
 from utils_io import save_json
 
@@ -73,6 +74,25 @@ def process(video0: Path, video1: Path, out_json: Path) -> None:
 
     cap0.release(), cap1.release(), cv.destroyAllWindows()
     save_json(output, out_json)
+    
+    
+    
+    
+class Pose2DEstimator:
+    """
+    Wraps MediaPipe Pose for live per-frame inference.
+    Input:  BGR frame (H, W, 3)
+    Output: (33, 2) pixel coordinates, NaN if no detection
+    """
+    def __init__(self, model_complexity: int = 0):
+        self.pose = mp.solutions.pose.Pose(
+            model_complexity = model_complexity,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+        
+    def detect(self, frame: np.ndarray) -> np.ndarray:
+        
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
