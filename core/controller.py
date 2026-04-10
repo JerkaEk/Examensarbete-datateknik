@@ -44,6 +44,9 @@ class Controller:
         log.warning("Calibration already running")
         return
 
+    if self.preview_active:
+        self._stop_preview()
+
     log.info("Starting calibration")
     self.calibration_running = True
 
@@ -56,6 +59,8 @@ class Controller:
         log.error("Calibration failed")
 
     self.calibration_running = False
+    if self.cam0_id and self.cam1_id:
+        self._start_preview()
     
     def on_calibration_settings_opened(self):
       values = load_yaml("calibration_settings.yaml")
