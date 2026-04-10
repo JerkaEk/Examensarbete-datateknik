@@ -2,7 +2,7 @@ import customtkinter as ctk
 import matplotlib.pyplot as plt
 import cv2 as cv
 
-from PTL import Image
+from PIL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
@@ -73,7 +73,7 @@ class MainWindow(ctk.CTk):
   def _build_content(self):
     # Outer container under top bar
     self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-    self.content.pack(side="top", fill="both", expand=True, padx=8, pady=8)
+    self.content.pack(side="top", fill="both", expand=True)
     
     # Camera settings panel
     self.camera_settings_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
@@ -85,16 +85,14 @@ class MainWindow(ctk.CTk):
     self.calibration_settings_panel.pack(side="left", fill="y")
     self.calibration_settings_panel.pack_propagate(False)
     
-    # Config rows: 3D-plotting 2x size of camera preview
-    self.main = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent")
-    self.main.pack(side="left", fill="both", expand=True, padx=8, pady=8)
+    # Config Columns - Camera previews
+    self.camera_column = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent")
+    self.camera_column.pack(side="left", fill="y", padx=(8, 4), pady=8)
     
-    self.main.rowconfigure(0, weight=2)   # 3D-plot
-    self.main.rowconfigure(1, weight=1)   # Cameras
-    self.main.columnconfigure(0, weight=1)
-
-    self.main.rowconfigure(0, weight=2)
-    self.main.rowconfigure(1, weight=1)
+    # Config Columns - 3D-plot
+    self.main = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent")
+    self.main.pack(side="left", fill="both", expand=True, padx=(4, 8), pady=8)
+    self.main.rowconfigure(0, weight=1)
     self.main.columnconfigure(0, weight=1)
     
     self._build_plot_area()
@@ -102,7 +100,7 @@ class MainWindow(ctk.CTk):
     
   def _build_plot_area(self):
     self.plot_frame = ctk.CTkFrame(self.main)
-    self.plot_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
+    self.plot_frame.grid(row=0, column=0, sticky="nsew")
 
     # Matplotlib figure med mörk bakgrund
     self.fig = plt.Figure(facecolor="#2b2b2b")
@@ -123,34 +121,28 @@ class MainWindow(ctk.CTk):
     self.btn_reset_view.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
     
   def _build_camera_preview(self):
-    self.camera_row = ctk.CTkFrame(self.main, fg_color="transparent")
-    self.camera_row.grid(row=1, column=0, sticky="nsew")
-
-    self.camera_row.columnconfigure(0, weight=1)
-    self.camera_row.columnconfigure(1, weight=1)
-    self.camera_row.rowconfigure(0, weight=1)
-
     # Cam 0
-    self.cam0_frame = ctk.CTkFrame(self.camera_row)
-    self.cam0_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
-
+    self.cam0_frame = ctk.CTkFrame(self.camera_column)
+    self.cam0_frame.pack(side="top", fill="both", expand=True, pady=(0, 4))
+    
     self.cam0_label = ctk.CTkLabel(
-        self.cam0_frame,
-        text="No signal – cam 0",
-        text_color="gray50",
-        font=ctk.CTkFont(size=14),
+      self.cam0_frame,
+      text="No signal – cam 0",
+      text_color="gray50",
+      font=ctk.CTkFont(size=14),
     )
+    
     self.cam0_label.place(relx=0.5, rely=0.5, anchor="center")
 
     # Cam 1
-    self.cam1_frame = ctk.CTkFrame(self.camera_row)
-    self.cam1_frame.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
+    self.cam1_frame = ctk.CTkFrame(self.camera_column)
+    self.cam1_frame.pack(side="top", fill="both", expand=True, pady=(4, 0))
 
     self.cam1_label = ctk.CTkLabel(
-        self.cam1_frame,
-        text="No signal – cam 1",
-        text_color="gray50",
-        font=ctk.CTkFont(size=14),
+      self.cam1_frame,
+      text="No signal – cam 1",
+      text_color="gray50",
+      font=ctk.CTkFont(size=14),
     )
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
     
