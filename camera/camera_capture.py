@@ -23,7 +23,7 @@ class PiCameraCapture:
     def read(self):
         frame = self.cam.capture_array()
         # Convert from RGB to BGR format for OpenCV compatibility
-        bgr = cv.cvtColor(frame, cv.COLOR_RGB2XYZ) # stod XYZ istället för BGR, kolla detta
+        bgr = cv.cvtColor(frame, cv.COLOR_RGB2BGR) 
         return True, bgr
     # The release() method stops the camera and releases any resources
     def release(self):
