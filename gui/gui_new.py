@@ -86,8 +86,9 @@ class MainWindow(ctk.CTk):
     self.calibration_settings_panel.pack_propagate(False)
     
     # Config Columns - Camera previews
-    self.camera_column = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent")
+    self.camera_column = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent", width=600)
     self.camera_column.pack(side="left", fill="y", padx=(8, 4), pady=8)
+    self.camera_column.pack_propagate(False)
     
     # Config Columns - 3D-plot
     self.main = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent")
@@ -415,7 +416,7 @@ class MainWindow(ctk.CTk):
       )
       return
 
-    self.controller.on_camera_saved(cam0, cam1)
+    self.controller.on_camera_settings_saved(cam0, cam1)
     self._camera_settings_panel_open = False
     self._set_panel(self.camera_settings_panel, False)
 
