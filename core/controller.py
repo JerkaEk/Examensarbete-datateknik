@@ -1,5 +1,6 @@
 import logging
 from camera.cameras import camera_capture
+from calibration.auto_settings import generate_yaml, load_yaml
 
 #from calibration import calibration, auto_settings
 #from pose_estimaiton import pose2d_extractor, triangulate3d #?
@@ -56,10 +57,14 @@ class Controller:
 
     self.calibration_running = False
     
-  def on_calibration_settings_clicked(self):
-    log.info("Opening calibration settings")
-    # TODO read calibration_settings.yaml.
-    # TODO save if user makes changes.
+    def on_calibration_settings_opened(self):
+      values = load_yaml("calibration_settings.yaml")
+      self.gui.populate_settings(values)
+      
+    def on_calibration_settings_saved(self, values: dict):
+      from calibration.auto_settings import generate_yaml
+      # TODO: generate_yaml needs cam0/cam1
+      
     
   def on_toggle_preview(self):
     if self.preview_active:
