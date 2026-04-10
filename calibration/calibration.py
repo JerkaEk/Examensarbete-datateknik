@@ -21,6 +21,7 @@ import cv2 as cv
 import numpy as np
 from typing import Dict, Tuple
 from scipy import linalg
+from camera.camera_capture import open_camera, PiCameraCapture
 
 try:
     from picamera2 import Picamera2
@@ -105,61 +106,6 @@ def projection_matrix(K: np.ndarray, R: np.ndarray, t: np.ndarray) -> np.ndarray
     return K @ make_homogeneous(R, t)[:3, :]
 
 
-
-
-# -----------------------------------------------------------------------------#
-# PiCamera2 wrapper
-# -----------------------------------------------------------------------------#
-class PiCameraCapture:
-    """Wrapper around Picamera2 to mimic cv.VideoCapture interface."""
-    def __init__(self, camera_index: int, width: int = 640, height: int = 480):
-        self.cam = Picamera2(camera_index)
-        config = self.cam.create_preview_configuration(
-            main={"format": "RGB888", "size": (width, height)}
-        )
-        self.cam.configure(config)
-        self.cam.start()
-
-    def read(self):
-        frame = self.cam.capture_array()
-        bgr = cv.cvtColor(frame, cv.COLOR_RGB2XYZ)
-        return True, bgr
-
-    def release(self):
-        self.cam.stop()
-        self.cam.close()
-
-    def isOpened(self):
-        return True
-
-# -----------------------------------------------------------------------------#
-# Dynamic camera selection
-# -----------------------------------------------------------------------------#
-def open_camera(camera_id, width=1920, height=1080):
-  """
-  Try cv.VideoCapture first (USB) with PiCameraCapture as fallback(CSI).
-  Returns a camera object with read() and release() interface.
-  """
-  # Check if USB camera
-  if isinstance(camera_id, str) and (camera_id.startswith("/dev/video")):
-    cap = cv.VideoCapture(camera_id)
-    if cap.isOpened():
-      print(f"[CAM] Opened USB Camera {camera_id}")
-      return cap
-    
-  # Fallback to PiCam(CSI)
-  if isinstance(camera_id, int):
-    if not HAS_PICAMERA:
-        print("[WARN] picamera2 not available, cannot open CSI camera")
-        return None
-    try:
-        cap = PiCameraCapture(camera_id)
-        return cap
-    except Exception as e:
-        print(f"[CAM] PiCamera failed: {e}")
-
-    sys.exit(f"[ERROR] could not open camera: {camera_id}")
-
 # -----------------------------------------------------------------------------#
 # Image capture — uses PiCameraCapture instead of cv.VideoCapture
 # -----------------------------------------------------------------------------#
@@ -168,62 +114,74 @@ def capture_single_camera(camera_key: str) -> None:
     Grab checkerboard frames from one CSI camera.
     Saves PNGs into ./frames/.
     """
-    _ensure_dir("frames")
+    _ensure_dir("camera/frames")
 
     cam_id = calibration_settings[camera_key]
     w = calibration_settings["frame_width"]
     h = calibration_settings["frame_height"]
     n_frames = calibration_settings["mono_calibration_frames"]
+    # The scale factor for resizing the preview window. A larger scale value will 
+    # result in a smaller preview window, which can help improve performance.
     scale = calibration_settings["view_resize"]
     cooldown_default = calibration_settings["cooldown"]
 
+    # open the camera using the dynamic selection function
     cap=open_camera(cam_id, width=w, height=h)
 
     saved, cooldown, recording = 0, cooldown_default, False
 
+    # Loop until we have saved the required number of frames
     while saved < n_frames:
+        # Read a frame from the camera. If it fails, exit with an error message.
         ok, frame = cap.read()
         if not ok:
             sys.exit("[ERROR] No data from camera")
-
+        # Create a resized preview of the frame for display. This is done to make the display faster.
         preview = _resize_preview(frame, scale)
-
+        # Display instructions or status on the preview image.
         msg = (
             "Press SPACE to start" if not recording else
             f"Cooldown: {cooldown:2d}  |  Saved: {saved}/{n_frames}"
         )
+        # Write text in the image
         cv.putText(
             preview, msg, (40, 40), cv.FONT_HERSHEY_COMPLEX, 1,
             (0, 255, 0) if recording else (0, 0, 255), 2
         )
-
+        # Show the preview window with the current frame
         cv.imshow(f"Preview - {camera_key}", preview)
+        # Wait for a key press for 1 ms. If the user presses ESC, exit. If they press SPACE, start recording.
         key = cv.waitKey(1) & 0xFF
 
         if key == 27:
             sys.exit("[ABORT] User exit")
         if key == 32:
             recording = True
-
+        
         if recording:
             cooldown -= 1
+            # If the cooldown has reached zero, save the current frame
             if cooldown <= 0:
-                filename = os.path.join("frames", f"{camera_key}_{saved:02d}.png")
+                # Create filename
+                filename = os.path.join("camera/frames", f"{camera_key}_{saved:02d}.png")
+                # Save the current picture to the specified filename created above
                 cv.imwrite(filename, frame)
                 print(f"[IMG] {filename}")
+                # Increment saved with 1
                 saved += 1
                 cooldown = cooldown_default
-
+    # Stop camera and release resources
     cap.release()
+    # Close OpenCV windows
     cv.destroyAllWindows()
 
 
 def capture_stereo_pair(cam0: str, cam1: str) -> None:
     """
     Capture synchronized checkerboard frames from cam0 and cam1.
-    Saves images to ./frames_pair/.
+    Saves images to ./camera/frames_pair/.
     """
-    _ensure_dir("frames_pair")
+    _ensure_dir("camera/frames_pair")
 
     w = calibration_settings["frame_width"]
     h = calibration_settings["frame_height"]
@@ -265,8 +223,8 @@ def capture_stereo_pair(cam0: str, cam1: str) -> None:
         if recording:
             cooldown -= 1
             if cooldown <= 0:
-                fn0 = os.path.join("frames_pair", f"{cam0}_{saved:02d}.png")
-                fn1 = os.path.join("frames_pair", f"{cam1}_{saved:02d}.png")
+                fn0 = os.path.join("camera/frames_pair", f"{cam0}_{saved:02d}.png")
+                fn1 = os.path.join("camera/frames_pair", f"{cam1}_{saved:02d}.png")
                 cv.imwrite(fn0, f0)
                 cv.imwrite(fn1, f1)
                 print(f"[IMG] {fn0}  |  {fn1}")
@@ -332,8 +290,8 @@ def calibrate_intrinsics(img_pattern: str) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def save_intrinsics(K: np.ndarray, dist: np.ndarray, cam_key: str) -> None:
-    _ensure_dir("camera_parameters")
-    with open(f"camera_parameters/{cam_key}_intrinsics.dat", "w") as fh:
+    _ensure_dir("camera/camera_parameters")
+    with open(f"camera/camera_parameters/{cam_key}_intrinsics.dat", "w") as fh:
         _write_matrix(fh, "intrinsic", K)
         _write_matrix(fh, "distortion", dist)
 
@@ -388,13 +346,13 @@ def stereo_calibrate(
 def save_extrinsics(R0: np.ndarray, t0: np.ndarray,
                     R1: np.ndarray, t1: np.ndarray,
                     prefix: str = "") -> None:
-    _ensure_dir("camera_parameters")
+    _ensure_dir("camera/camera_parameters")
 
-    with open(f"camera_parameters/{prefix}camera0_rot_trans.dat", "w") as fh:
+    with open(f"camera/camera_parameters/{prefix}camera0_rot_trans.dat", "w") as fh:
         _write_matrix(fh, "R", R0)
         _write_matrix(fh, "T", t0)
 
-    with open(f"camera_parameters/{prefix}camera1_rot_trans.dat", "w") as fh:
+    with open(f"camera/camera_parameters/{prefix}camera1_rot_trans.dat", "w") as fh:
         _write_matrix(fh, "R", R1)
         _write_matrix(fh, "T", t1)
 
@@ -464,22 +422,26 @@ def run_calibration(settings_path: str = "calibration_settings.yaml") -> bool:
         return False
 
     try:
+        # cature frames on each camrea
         capture_single_camera("camera0")
         capture_single_camera("camera1")
 
-        K0, d0 = calibrate_intrinsics("frames/camera0*")
+        # compute intrinsics for camera0 and save
+        K0, d0 = calibrate_intrinsics("camera/frames/camera0*")
         save_intrinsics(K0, d0, "camera0")
-
-        K1, d1 = calibrate_intrinsics("frames/camera1*")
+        # compute intrinsics for camera1 and save
+        K1, d1 = calibrate_intrinsics("camera/frames/camera1*")
         save_intrinsics(K1, d1, "camera1")
 
+        # cature stereo pairs for extrinsic calibration
         capture_stereo_pair("camera0", "camera1")
 
+        # compute extrinsics and save
         R01, t01 = stereo_calibrate(
             K0, d0, K1, d1,
-            "frames_pair/camera0*", "frames_pair/camera1*"
+            "camera/frames_pair/camera0*", "camera/frames_pair/camera1*"
         )
-
+       
         R0, t0 = np.eye(3, dtype=np.float32), np.zeros((3, 1), np.float32)
         save_extrinsics(R0, t0, R01, t01)
 
@@ -505,10 +467,10 @@ def main() -> None:
     capture_single_camera("camera1")
 
     # Step 2 – compute intrinsics
-    K0, d0 = calibrate_intrinsics("frames/camera0*")
+    K0, d0 = calibrate_intrinsics("camera/frames/camera0*")
     save_intrinsics(K0, d0, "camera0")
 
-    K1, d1 = calibrate_intrinsics("frames/camera1*")
+    K1, d1 = calibrate_intrinsics("camera/frames/camera1*")
     save_intrinsics(K1, d1, "camera1")
 
     # Step 3 – capture stereo pairs
@@ -517,20 +479,20 @@ def main() -> None:
     # Step 4 – stereo calibration
     R01, t01 = stereo_calibrate(
         K0, d0, K1, d1,
-        "frames_pair/camera0*", "frames_pair/camera1*"
+        "camera/frames_pair/camera0*", "camera/frames_pair/camera1*"
     )
 
     # Step 5 – save extrinsics (camera0 is world origin)
     R0, t0 = np.eye(3, dtype=np.float32), np.zeros((3, 1), np.float32)
     save_extrinsics(R0, t0, R01, t01)
 
-    # Optional – live check
-    live_axis_overlay(
-        "camera0", "camera1",
-        K0, d0, R0, t0,
-        K1, d1, R01, t01,
-        z_shift=60.0
-    )
+    # # Optional – live check
+    # live_axis_overlay(
+    #     "camera0", "camera1",
+    #     K0, d0, R0, t0,
+    #     K1, d1, R01, t01,
+    #     z_shift=60.0
+    # )
 
 
 if __name__ == "__main__":
