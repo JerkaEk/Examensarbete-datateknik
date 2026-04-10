@@ -1,6 +1,8 @@
 import customtkinter as ctk
 import matplotlib.pyplot as plt
+import cv2 as cv
 
+from PTL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
@@ -421,9 +423,7 @@ class MainWindow(ctk.CTk):
       )
       return
 
-    # TODO: send to controller → generate_yaml()
-    print(f"[CAM] Selected cam0: {cam0['display']}, cam1: {cam1['display']}")
-
+    self.controller.on_camera_saved(cam0, cam1)
     self._camera_settings_panel_open = False
     self._set_panel(self.camera_settings_panel, False)
 
@@ -483,11 +483,25 @@ class MainWindow(ctk.CTk):
   # -------------------------------------------------- # 
   # Public API
   # -------------------------------------------------- #
-  def update_cam0(self, image):
-    self.cam0_label.configure(image=image, text="")
+  def update_cam0(self, frame):
+    h = self.cam0_frame.winfo_height()
+    w = self.cam0_frame.winfo_width()
+    if h < 2 or w < 2:
+       return
+    rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+    ctk_img = ctk.CTkImage(Image.fromarray(rgb), size=(w, h))
+    self.cam0_label.configure(image=ctk_img, text="")
+    self.cam0_label.image = ctk_img
     
-  def update_cam1(self, image):
-    self.cam1_label.configure(image=image, text="")
+  def update_cam1(self, frame):
+    h = self.cam1_frame.winfo_height()
+    w = self.cam1_frame.winfo_width()
+    if h < 2 or w < 2:
+      return
+    rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+    ctk_img = ctk.CTkImage(Image.fromarray(rgb), size=(w, h))
+    self.cam1_label.configure(image=ctk_img, text="")
+    self.cam1_label.image = ctk_img
     
   def populate_settings(self, values: dict):
     for setting in CALIBRATION_SETTINGS:
