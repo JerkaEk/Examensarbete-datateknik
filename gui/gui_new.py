@@ -2,7 +2,7 @@ import customtkinter as ctk
 import matplotlib.pyplot as plt
 import cv2 as cv
 
-from PTL import Image
+from PIL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
