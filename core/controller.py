@@ -1,5 +1,5 @@
 import logging
-from camera.cameras import camera_capture
+from camera.camera_capture import open_camera
 from calibration.auto_settings import generate_yaml, load_yaml
 
 #from calibration import calibration, auto_settings
@@ -89,8 +89,8 @@ class Controller:
     self._start_preview()    
     
   def _start_preview(self):
-    self.cam0 = camera_capture(self.cam0_id)
-    self.cam1 = camera_capture(self.cam1_id)
+    self.cam0 = open_camera(self.cam0_id)
+    self.cam1 = open_camera(self.cam1_id)
     self.preview_active = True
     log.info("Preview Started")
     self._poll_frames()
