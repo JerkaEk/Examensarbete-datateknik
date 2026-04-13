@@ -6,3 +6,4 @@ frames/
 frames_pair/
 camera_parameters/
 .python-version
+camera_settings.yaml
