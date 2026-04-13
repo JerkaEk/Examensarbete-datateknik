@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 pose2d_extractor.py
 ===================
@@ -18,8 +19,7 @@ import numpy as np
 
 from typing import List, Dict
 from pathlib import Path
-from __future__ import annotations
-from pose_estimation.utils_io import save_json
+from utils.utils_io import save_json
 
 log = logging.getLogger(__name__)
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 utils_io.py
 ===========
@@ -11,7 +12,6 @@ import logging
 
 import numpy as np
 
-from __future__ import annotations
 from pathlib import Path
 from typing import Tuple, Dict, List
 

@@ -4,6 +4,8 @@ import logging
 import numpy as np
 
 from pose_estimation.pose2d_extractor import Pose2DEstimator
+from pose_estimation.triangulate3d import Triangulator
+from utils.utils_io import load_extrinsics, load_intrinsics
 
 log = logging.getLogger(__name__)
 
@@ -15,7 +17,10 @@ class Model:
     self.estimator1 = Pose2DEstimator(model_complexity=0)
     
     # Triangulator
-    self.triangulator = None
+    k0, _ = load_intrinsics("camera/camera_parameters/camera0_intrinsics.dat")
+    k1, _ = load_intrinsics("camera/camera_parameters/camera1_intrinsics.dat")
+    r1, t1 = load_extrinsics("camera/camera_parameters/camera1_rot_trans.dat")
+    self.triangulator = Triangulator(k0, k1, r1, t1)
     
   # Cameras
     
@@ -42,7 +47,7 @@ class Model:
     landmarks_2d_right = self.estimator1.detect(frame1)
     
     # Triangulate to 3D
-    landmarks_3d = self._triangulate(landmarks_2d_left, landmarks_2d_right)
+    landmarks_3d = self.triangulate(landmarks_2d_left, landmarks_2d_right)
     
     return {
       "frame_left": frame0,
@@ -54,7 +59,7 @@ class Model:
     
 
   # Internal functions
-  def _triangulate(self, pts0: np.ndarray, pts1: np.ndarray) -> np.ndarray:
+  def triangulate(self, pts0: np.ndarray, pts1: np.ndarray) -> np.ndarray:
     """
     Retrieves 3D landmarks from triangulator by sending a pair of 2D landmarks.
     

@@ -1,0 +1,11 @@
+camera0: 0
+camera1: /dev/video0
+frame_width: 640
+frame_height: 480
+checkerboard_rows: 9
+checkerboard_columns: 6
+checkerboard_box_size_scale: 2.5
+mono_calibration_frames: 15
+stereo_calibration_frames: 15
+view_resize: 2
+cooldown: 20
