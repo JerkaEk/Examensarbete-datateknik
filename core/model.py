@@ -17,10 +17,14 @@ class Model:
     self.estimator1 = Pose2DEstimator(model_complexity=0)
     
     # Triangulator
-    k0, _ = load_intrinsics("camera/camera_parameters/camera0_intrinsics.dat")
-    k1, _ = load_intrinsics("camera/camera_parameters/camera1_intrinsics.dat")
-    r1, t1 = load_extrinsics("camera/camera_parameters/camera1_rot_trans.dat")
-    self.triangulator = Triangulator(k0, k1, r1, t1)
+    try:
+        k0, _ = load_intrinsics("camera/camera_parameters/camera0_intrinsics.dat")
+        k1, _ = load_intrinsics("camera/camera_parameters/camera1_intrinsics.dat")
+        r1, t1 = load_extrinsics("camera/camera_parameters/camera1_rot_trans.dat")
+        self.triangulator = Triangulator(k0, k1, r1, t1)
+        log.info("Calibration loaded successfully")
+    except FileNotFoundError:
+        log.warning(f"Calibration files not found")
     
   # Cameras
     
