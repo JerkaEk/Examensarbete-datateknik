@@ -5,12 +5,17 @@ utils_io.py
 Light-weight helpers for reading / writing JSON and camera-parameter files.
 """
 
-from __future__ import annotations
+import yaml
 import json
+import logging
+
 import numpy as np
+
+from __future__ import annotations
 from pathlib import Path
 from typing import Tuple, Dict, List
 
+log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 # JSON helpers
@@ -25,7 +30,7 @@ def save_json(data: Dict | List, path: str | Path, indent: int = 4) -> None:
     """Write *data* to *path* in UTF-8 JSON."""
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=indent)
-    print(f"[IO] JSON saved → {path}")
+    log.info(f"JSON saved -> {path}")
 
 
 # --------------------------------------------------------------------------- #
@@ -63,3 +68,26 @@ def load_extrinsics(file_path: str | Path) -> Tuple[np.ndarray, np.ndarray]:
     R = np.array(r_rows)
     t = np.array(t_rows).reshape(3, 1)
     return R, t
+
+def load_yaml(path: str) -> Dict:
+    """
+    Load a YAML file and return its contents as a dict
+    Returns empty dict if file does not exist
+    """
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f)
+            log.info(f"Loaded YAML from '{path}'")
+            return data or {}
+    except FileNotFoundError:
+        log.warning(f"'{path}' not found")
+        return {}
+    
+def save_yaml(data: Dict, path: str) -> Dict:
+    """
+    Save a dict to a YAML file.
+    Creates the file if it does not exist.
+    """
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    log.info(f"Saved to '{path}'")
