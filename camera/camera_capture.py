@@ -23,7 +23,7 @@ class PiCameraCapture:
     def read(self):
         frame = self.cam.capture_array()
         # Convert from RGB to BGR format for OpenCV compatibility
-        bgr = cv.cvtColor(frame, cv.COLOR_RGB2BGR) 
+        bgr = cv.cvtColor(frame, cv.COLOR_RGB2BGR) # stod XYZ istället för BGR, kolla detta
         return True, bgr
     # The release() method stops the camera and releases any resources
     def release(self):
@@ -33,9 +33,8 @@ class PiCameraCapture:
     def isOpened(self):
         return True
     
-# -----------------------------------------------------------------------------#
-# Dynamic camera selection. Uses default witdth/height if no parameters are provided.
-# -----------------------------------------------------------------------------#
+
+# Dynamic camera selection. Uses default witdth/height if no parameters are provided
 def open_camera(camera_id, width=1920, height=1080):
   """
   Try cv.VideoCapture first (USB) with PiCameraCapture as fallback(CSI).
@@ -48,7 +47,6 @@ def open_camera(camera_id, width=1920, height=1080):
     if cap.isOpened():
       print(f"[CAM] Opened USB Camera {camera_id}")
       return cap
-    
   # Fallback to PiCam(CSI)
   if isinstance(camera_id, int):
     if not HAS_PICAMERA:
@@ -60,7 +58,6 @@ def open_camera(camera_id, width=1920, height=1080):
         return cap
     except Exception as e:
         print(f"[CAM] PiCamera failed: {e}")
-
     sys.exit(f"[ERROR] could not open camera: {camera_id}")
 
 
