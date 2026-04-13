@@ -1,3 +1,5 @@
+import logging
+
 import customtkinter as ctk
 import matplotlib.pyplot as plt
 import cv2 as cv
@@ -7,6 +9,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
 from core.settings_config import CALIBRATION_SETTINGS
+
+log = logging.getLogger(__name__)
 
 # -------------------------------------------------- #
 # Themes & Size Settings
@@ -188,7 +192,7 @@ class MainWindow(ctk.CTk):
     ctk.CTkButton(
       btn_row,
       text="Save",
-      command=self._on_settings_save,
+      command=self._on_calibration_settings_save,
     ).pack(side="left", expand=True, fill="x", padx=(0, 4))
 
     ctk.CTkButton(
@@ -196,7 +200,7 @@ class MainWindow(ctk.CTk):
       text="Cancel",
       fg_color="gray30",
       hover_color="gray40",
-      command=self._on_settings_cancel,
+      command=self._on_settings_calibration_cancel,
     ).pack(side="left", expand=True, fill="x", padx=(4, 0))
     
   def _build_camera_settings_panel(self):
@@ -436,7 +440,7 @@ class MainWindow(ctk.CTk):
     self.canvas.get_tk_widget().pack(fill="both", expand=True)  # Show canvas
   
   def _on_camera_settings(self):
-    print("Camera settings clicked")
+    log.debug("Camera settings panel toggled")
     self._camera_settings_panel_open = not self._camera_settings_panel_open
     if self._camera_settings_panel_open and not self._camera_settings_built:
       self._build_camera_settings_panel()
@@ -444,7 +448,7 @@ class MainWindow(ctk.CTk):
     self._set_panel(self.camera_settings_panel, self._camera_settings_panel_open)
     
   def _on_calibration_settings(self):
-    print("Calibration settings clicked")
+    log.debug("Calibration settings panel toggled")
     self._calibration_settings_panel_open = not self._calibration_settings_panel_open
     if self._calibration_settings_panel_open and not self._calibration_settings_built:
       self._build_calibration_settings_panel()
@@ -456,20 +460,20 @@ class MainWindow(ctk.CTk):
   # -------------------------------------------------- #
   
   def _on_calibrate(self):
-    print ("Calibrate clicked")
+    log.info("Calibrate clicked")
     self.controller.on_calibrate_clicked() 
     
   def _on_reset_view(self):
     self.ax.view_init(elev=20, azim=-60)  # matplotlib default
     self.canvas.draw()
     
-  def _on_settings_save(self):
-    values = {key: entry.get() for key, entry in self._settings_fields.items()}
-    print("Saving settings:", values)
+  def _on_calibration_settings_save(self):
+    values = {key: entry.get() for key, entry in self._settings_fields.items()}  
+    log.info(f"Saving calibrations settings: {values}")
     self._calibration_settings_panel_open = False
     self._set_panel(self.calibration_settings_panel, False)
 
-  def _on_settings_cancel(self):
+  def _on_settings_calibration_cancel(self):
     self._calibration_settings_panel_open = False
     self._set_panel(self.calibration_settings_panel, False)
   
@@ -477,6 +481,7 @@ class MainWindow(ctk.CTk):
   # Public API
   # -------------------------------------------------- #
   def update_cam0(self, frame):
+    """Update camera 0 preview with a new BGR frame."""
     h = self.cam0_frame.winfo_height()
     w = self.cam0_frame.winfo_width()
     if h < 2 or w < 2:
@@ -487,6 +492,7 @@ class MainWindow(ctk.CTk):
     self.cam0_label.image = ctk_img
     
   def update_cam1(self, frame):
+    """Update camera 1 preview with a new BGR frame."""
     h = self.cam1_frame.winfo_height()
     w = self.cam1_frame.winfo_width()
     if h < 2 or w < 2:
@@ -497,6 +503,7 @@ class MainWindow(ctk.CTk):
     self.cam1_label.image = ctk_img
     
   def populate_settings(self, values: dict):
+    """Populate calibration settings fields with values from a dict."""
     for setting in CALIBRATION_SETTINGS:
       key = setting["key"]
       if key in self._settings_fields:
@@ -506,11 +513,13 @@ class MainWindow(ctk.CTk):
         entry.insert(0, str(value))
         
   def show_calibration_status(self, message: str):
-    print(f"[STATUS] {message}")
+    """Display a calibration status message in the GUI."""
+    log.info(f"Calibration status: {message}")
     # TODO: visa i GUI
  
   def show_error(self, message: str):
-    print(f"[ERROR] {message}")
+    """Display an error message in the GUI."""  
+    log.error(f"Error: {message}")
     # TODO: visa i GUI
   
   # -------------------------------------------------- #

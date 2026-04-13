@@ -1,5 +1,8 @@
 import cv2 as cv
 import sys
+import logging
+
+log = logging.getLogger(__name__)
 
 try:
     from picamera2 import Picamera2
@@ -45,19 +48,19 @@ def open_camera(camera_id, width=1920, height=1080):
     # Try to open with OpenCV
     cap = cv.VideoCapture(camera_id)
     if cap.isOpened():
-      print(f"[CAM] Opened USB Camera {camera_id}")
+      log.info(f"Opened USB Camera {camera_id}")
       return cap
   # Fallback to PiCam(CSI)
   if isinstance(camera_id, int):
     if not HAS_PICAMERA:
-        print("[WARN] picamera2 not available, cannot open CSI camera")
+        log.warning("picamera2 not available, cannot open CSI camera")
         return None
     try:
         # Open PiCamera with specified resolution
         cap = PiCameraCapture(camera_id)
         return cap
     except Exception as e:
-        print(f"[CAM] PiCamera failed: {e}")
+        log.error(f"PiCamera failed: {e}")
     sys.exit(f"[ERROR] could not open camera: {camera_id}")
 
 

@@ -9,16 +9,19 @@ Example
 -------
 $ python pose2d_extractor.py --v0 cam0.mp4 --v1 cam1.mp4 --out pose2d.json
 """
-
-from __future__ import annotations
 import argparse
-from pathlib import Path
+import logging
+
 import cv2 as cv
 import mediapipe as mp
-from typing import List, Dict
 import numpy as np
 
+from typing import List, Dict
+from pathlib import Path
+from __future__ import annotations
 from pose_estimation.utils_io import save_json
+
+log = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -29,7 +32,6 @@ def init_pose() -> mp.solutions.pose.Pose:
     return mp.solutions.pose.Pose(model_complexity=2,
                                   min_detection_confidence=0.5,
                                   min_tracking_confidence=0.5)
-
 
 def detect_landmarks(frame, pose) -> List[Dict] | None:
     """Run pose inference on *frame* and return landmark dicts or *None*."""
@@ -74,9 +76,7 @@ def process(video0: Path, video1: Path, out_json: Path) -> None:
 
     cap0.release(), cap1.release(), cv.destroyAllWindows()
     save_json(output, out_json)
-    
-    
-    
+    log.info(f"Extracted landmarks from {frame_idx} frames -> {out_json}")
     
 class Pose2DEstimator:
     """
@@ -95,13 +95,13 @@ class Pose2DEstimator:
         h, w = frame.shape[:2]
         landmarks = detect_landmarks(frame, self.pose)
         if landmarks is None:
+            log.debug("No pose detected in frame")
             return np.full((33, 2), np.nan, dtype=np.float32)
         return np.array([[lm["x"] * w, lm["y"] * h] for lm in landmarks],
                         dtype=np.float32)
         
     def close(self):
         self.pose.close()
-
 
 # ──────────────────────────────────────────────────────────────────────────── #
 if __name__ == "__main__":

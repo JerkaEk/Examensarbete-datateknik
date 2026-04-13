@@ -17,12 +17,16 @@ import os
 import sys
 import glob
 import yaml
+import logging
 import cv2 as cv
 import numpy as np
 from typing import Dict, Tuple
 from scipy import linalg
 from camera.camera_capture import open_camera, PiCameraCapture
 
+log = logging.getLogger(__name__)
+
+# Prevent app from crashing on non-linux machines.
 try:
     from picamera2 import Picamera2
     HAS_PICAMERA = True
@@ -69,13 +73,14 @@ def load_settings(file_name: str) -> None:
     if not mandatory_keys.issubset(calibration_settings):
         sys.exit("[ERROR] Missing keys in YAML. Required: " + ", ".join(mandatory_keys))
 
-    print(f"[INFO] Loaded settings from '{file_name}'")
+    log.info(f"Loaded settings from '{file_name}'")
 
 
 # Geometry utilities
-def dlt_triangulate(
+def dlt_triangulate(    # TODO: move this to triangulate?
     P1: np.ndarray, P2: np.ndarray, p1: np.ndarray, p2: np.ndarray
 ) -> np.ndarray:
+    """Triangulate a 3D point from two projection matrices and corresponding 2D points using DLT."""
     A = np.array(
         [
             p1[1] * P1[2, :] - P1[1, :],
@@ -89,6 +94,7 @@ def dlt_triangulate(
 
 
 def make_homogeneous(R: np.ndarray, t: np.ndarray) -> np.ndarray:
+    """Combine rotation matrix R and translation vector t into a 4x4 homogeneous transformation matrix."""
     H = np.eye(4, dtype=R.dtype)
     H[:3, :3] = R
     H[:3, 3] = t.ravel()
@@ -96,6 +102,7 @@ def make_homogeneous(R: np.ndarray, t: np.ndarray) -> np.ndarray:
 
 
 def projection_matrix(K: np.ndarray, R: np.ndarray, t: np.ndarray) -> np.ndarray:
+    """Compute the 3x4 projection matrix P = K · [R | t]."""
     return K @ make_homogeneous(R, t)[:3, :]
 
 
@@ -155,7 +162,7 @@ def capture_single_camera(camera_key: str) -> None:
                 filename = os.path.join("camera/frames", f"{camera_key}_{saved:02d}.png")
                 # Save the current picture to the specified filename created above
                 cv.imwrite(filename, frame)
-                print(f"[IMG] {filename}")
+                log.debug(f"Saved: {filename}")
                 # Increment saved with 1
                 saved += 1
                 cooldown = cooldown_default
@@ -222,7 +229,7 @@ def capture_stereo_pair(cam0: str, cam1: str) -> None:
                 # Save the current picture to the specified filename created above
                 cv.imwrite(fn0, f0)
                 cv.imwrite(fn1, f1)
-                print(f"[IMG] {fn0}  |  {fn1}")
+                log.debug(f"Frame pair: {fn0} - {fn1}")
                 # Increment saved with 1
                 saved += 1
                 cooldown = cooldown_default
@@ -234,6 +241,7 @@ def capture_stereo_pair(cam0: str, cam1: str) -> None:
 
 
 def _generate_object_points() -> np.ndarray:
+    """Generate 3D checkerboard corner coordinates scaled by box size. Returns (rows*cols, 3) float32 array."""
     rows = calibration_settings["checkerboard_rows"]
     cols = calibration_settings["checkerboard_columns"]
     scale = calibration_settings["checkerboard_box_size_scale"]
@@ -243,6 +251,17 @@ def _generate_object_points() -> np.ndarray:
     return objp * scale
 
 def calibrate_intrinsics(img_pattern: str) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Compute intrinsic camera parameters from checkerboard images.
+    
+    Args:
+        img_pattern: Global pattern for calibration images e.g. 'camera/frames/camera0*'
+
+    Returns:
+        K:    (3, 3) camera matrix
+        dist: (N,)  distortion coefficients
+    """
+    
     # Get all images sorted with matching pattern, for an example camera/frames/camera0*
     images = sorted(glob.glob(img_pattern))
     if not images:
@@ -280,6 +299,7 @@ def calibrate_intrinsics(img_pattern: str) -> Tuple[np.ndarray, np.ndarray]:
             if cv.waitKey(0) & 0xFF == ord("s"):
                 objpoints.pop()
                 imgpoints.pop()
+                log.debug("Sample skipped by user")
 
     cv.destroyAllWindows()
     # Get the height and width of images
@@ -288,14 +308,15 @@ def calibrate_intrinsics(img_pattern: str) -> Tuple[np.ndarray, np.ndarray]:
     # The function returns the re-projection error (rms) and the camera matrix (K) 
     # and distortion of the lens.
     rms, K, dist, *_ = cv.calibrateCamera(objpoints, imgpoints, (w, h), None, None)
-    print(f"[CALIB] {img_pattern}: RMS = {rms:.4f}")
-    print("[CALIB] K =\n", K)
-    print("[CALIB] dist =", dist.ravel())
+    log.info(f"Intrinsic calibration complete - RMS: {rms:.4f}")
+    log.debug(f"K =\n{K}")
+    log.debug(f"dist = {dist.ravel()}")
     # Return the camera matrix and distortion coefficients
     return K, dist
 
 
 def save_intrinsics(K: np.ndarray, dist: np.ndarray, cam_key: str) -> None:
+    """Save camera matrix and distortion coefficients to camera_parameters/{cam_key}_intrinsics.dat."""
     _ensure_dir("camera/camera_parameters")
     with open(f"camera/camera_parameters/{cam_key}_intrinsics.dat", "w") as fh:
         _write_matrix(fh, "intrinsic", K)
@@ -307,6 +328,13 @@ def stereo_calibrate(
     K1: np.ndarray, d1: np.ndarray,
     pattern0: str, pattern1: str
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Compute extrinsic parameters between two cameras using stereo calibration.
+
+    Returns:
+        R: (3, 3) rotation matrix from camera0 to camera1
+        T: (3, 1) translation vector from camera0 to camera1
+    """
     # Get all sorted image pares 
     imgs0 = sorted(glob.glob(pattern0))
     imgs1 = sorted(glob.glob(pattern1))
@@ -346,9 +374,11 @@ def stereo_calibrate(
         K0, d0, K1, d1, (w, h),
         criteria=criteria, flags=flags
     )
-    print(f"[STEREO] RMS = {rms:.4f}")
-    print("[STEREO] R =\n", R)
-    print("[STEREO] T =\n", T.ravel())
+    log.info(f"Extrinsic calibration complete - RMS: {rms:.4f}")
+    log.debug(f"R =\n{R}")
+    log.debug(f"dist = {T.ravel()}")
+    
+    
     # Return the roation and translation between the two cameras
     return R, T
 
@@ -356,6 +386,7 @@ def stereo_calibrate(
 def save_extrinsics(R0: np.ndarray, t0: np.ndarray,
                     R1: np.ndarray, t1: np.ndarray,
                     prefix: str = "") -> None:
+    """Save rotation and translation matrices for both cameras to camera_parameters/."""
     _ensure_dir("camera/camera_parameters")
     with open(f"camera/camera_parameters/{prefix}camera0_rot_trans.dat", "w") as fh:
         _write_matrix(fh, "R", R0)
@@ -366,10 +397,16 @@ def save_extrinsics(R0: np.ndarray, t0: np.ndarray,
 
     
 def run_calibration(settings_path: str = "calibration_settings.yaml") -> bool:
+    """
+    Run the full calibration pipeline: capture frames, compute intrinsics and extrinsics.
+
+    Returns:
+        True if calibration completed successfully, False otherwise.
+    """
     try:
         load_settings(settings_path)
     except SystemExit as e:
-        print(f"[ERROR] Could not read settings: {e}")
+        log.error(f"Could not read settings: {e}")
         return False
     try:
         # cature frames on each camrea
@@ -390,12 +427,11 @@ def run_calibration(settings_path: str = "calibration_settings.yaml") -> bool:
         )
         R0, t0 = np.eye(3, dtype=np.float32), np.zeros((3, 1), np.float32)
         save_extrinsics(R0, t0, R01, t01)
-        print("[INFO] Calibration completed!")
+        log.info("Calibration Completed!")
         return True
     except Exception as e:
-        print(f"[ERROR] Calibration failed!: {e}")
+        log.error(f"Calibration failed!: {e}")
         return False
-
 
 def main() -> None:
     if len(sys.argv) != 2:
@@ -419,7 +455,6 @@ def main() -> None:
     # Step 5 – save extrinsics (camera0 is world origin)
     R0, t0 = np.eye(3, dtype=np.float32), np.zeros((3, 1), np.float32)
     save_extrinsics(R0, t0, R01, t01)
-
 
 if __name__ == "__main__":
     main()
