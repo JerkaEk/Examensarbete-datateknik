@@ -6,8 +6,11 @@ import numpy as np
 from pose_estimation.pose2d_extractor import Pose2DEstimator
 from pose_estimation.triangulate3d import Triangulator
 from utils.utils_io import load_extrinsics, load_intrinsics
+from collections import deque
 
 log = logging.getLogger(__name__)
+
+SMOOTH_WINDOW=5 # Amount of frames to use for mean value smoothening
 
 class Model:
   def __init__(self):
@@ -17,6 +20,7 @@ class Model:
     self.estimator1 = Pose2DEstimator(model_complexity=0)
     
     # Triangulator
+    self.triangulator = None
     try:
         k0, _ = load_intrinsics("camera/camera_parameters/camera0_intrinsics.dat")
         k1, _ = load_intrinsics("camera/camera_parameters/camera1_intrinsics.dat")
@@ -25,11 +29,9 @@ class Model:
         log.info("Calibration loaded successfully")
     except FileNotFoundError:
         log.warning(f"Calibration files not found")
+        
+    self._landmark_buffer = deque(maxlen=SMOOTH_WINDOW)
     
-  # Cameras
-    
-  # Calibration
-  
   # Pose Estimation Pipeline
   def process(self, frame0: np.ndarray, frame1: np.ndarray) -> dict:
     """
@@ -52,6 +54,7 @@ class Model:
     
     # Triangulate to 3D
     landmarks_3d = self.triangulate(landmarks_2d_left, landmarks_2d_right)
+    landmarks_3d = self._smooth(landmarks_3d)
     
     return {
       "frame_left": frame0,
@@ -61,8 +64,6 @@ class Model:
       "landmarks_2d_right": landmarks_2d_right,
     }
     
-
-  # Internal functions
   def triangulate(self, pts0: np.ndarray, pts1: np.ndarray) -> np.ndarray:
     """
     Retrieves 3D landmarks from triangulator by sending a pair of 2D landmarks.
@@ -71,4 +72,10 @@ class Model:
     if self.triangulator is None:
       return np.full((33, 3), np.nan, dtype=np.float32)
     return self.triangulator.triangulate(pts0, pts1)
+  
+  # Internal functions
+  def _smooth(self, landmarks_3d: np.array) -> np.array:
+    """Apply temporal smoothing over the last N frames."""
+    self._landmark_buffer.append(landmarks_3d)
+    return np.nanmean(self._landmark_buffer, axis=0)
     
