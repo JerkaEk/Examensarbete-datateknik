@@ -3,6 +3,7 @@ import logging
 import customtkinter as ctk
 import matplotlib.pyplot as plt
 import cv2 as cv
+import numpy as np
 
 from PIL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -501,6 +502,30 @@ class MainWindow(ctk.CTk):
     ctk_img = ctk.CTkImage(Image.fromarray(rgb), size=(w, h))
     self.cam1_label.configure(image=ctk_img, text="")
     self.cam1_label.image = ctk_img
+    
+  def update_3d_plot(self, landmarks_3d: np.ndarray):
+    """Update the 3D plot with new landmark coordinates."""
+    CONNECTIONS = [
+        (0, 11), (0, 12),
+        (11, 13), (13, 15),
+        (12, 14), (14, 16),
+        (11, 23), (12, 24),
+        (23, 25), (25, 27),
+        (24, 26), (26, 28),
+        (23, 24), (11, 12),
+    ]
+
+    self.ax.clear()
+    self._style_3d_axes()
+
+    if not np.isnan(landmarks_3d).all():
+        x, y, z = landmarks_3d[:, 0], landmarks_3d[:, 1], landmarks_3d[:, 2]
+        self.ax.scatter(x, y, z, c="blue", s=20)
+        for i, j in CONNECTIONS:
+            if np.isfinite(landmarks_3d[i]).all() and np.isfinite(landmarks_3d[j]).all():
+                self.ax.plot([x[i], x[j]], [y[i], y[j]], [z[i], z[j]], c="red", linewidth=1.5)
+
+    self.canvas.draw()
     
   def populate_settings(self, values: dict):
     """Populate calibration settings fields with values from a dict."""

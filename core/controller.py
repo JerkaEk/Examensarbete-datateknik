@@ -2,6 +2,7 @@ import logging
 from camera.camera_capture import open_camera
 from calibration.auto_settings import generate_yaml, load_yaml
 from core.model import Model
+from utils.utils_io import load_yaml, save_yaml
 
 #from calibration import calibration, auto_settings
 #from pose_estimaiton import pose2d_extractor, triangulate3d #?
@@ -105,6 +106,12 @@ class Controller:
     log.info(f"Selected cameras: cam0={cam0['display']}, cam1={cam1['display']}")
     self.cam0_id = cam0['id']
     self.cam1_id = cam1['id']
+    
+    settings = load_yaml("calibration_settings.yaml")
+    settings["camera0"] = cam0["id"]
+    settings["camera1"] = cam1["id"]
+    save_yaml(settings, "calibration_settings.yaml")
+    
     self._start_preview()    
     
   def _start_preview(self):
