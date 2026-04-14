@@ -45,8 +45,7 @@ class Controller:
     if self.preview_active:
       self._stop_preview()
       
-    # Close all process threads here.    
-      
+    # Close all process threads here.     
 
   def on_calibrate_clicked(self):
     """Called by GUI when user clicks Calibrate."""
@@ -83,7 +82,6 @@ class Controller:
     log.info("Saving calibration settings")
     from calibration.auto_settings import generate_yaml
     # TODO: generate_yaml needs cam0/cam1
-      
     
   def on_toggle_preview(self):
     """Toggle live preview on/off."""
@@ -94,6 +92,11 @@ class Controller:
       log.info("Starting preview")
       self._start_preview()
       
+  def on_scan_cameras(self):
+    """Detect cameras and send result to GUI."""
+    from camera.detect_cameras import detect_all_cameras
+    cameras = detect_all_cameras()    
+    self.gui.update_camera_list(cameras)
   
   # Send to GUI
   

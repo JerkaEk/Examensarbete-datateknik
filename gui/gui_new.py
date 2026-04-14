@@ -367,32 +367,7 @@ class MainWindow(ctk.CTk):
     """Detect cameras and populate dropdowns."""
     self.scan_status.configure(text="Scanning...", text_color="gray50")
     self.update()
-
-    # Import here to avoid issues on Windows
-    from calibration.auto_settings import detect_all_cameras
-    cameras = detect_all_cameras()
-
-    if not cameras:
-      self.scan_status.configure(
-        text="No cameras found. Check connections.",
-        text_color="red"
-      )
-      return
-
-    self._available_cameras = cameras
-    display_names = [c["display"] for c in cameras]
-
-    self.cam0_dropdown.configure(values=display_names, state="normal")
-    self.cam1_dropdown.configure(values=display_names, state="normal")
-
-    # Auto-select if exactly 2 found
-    self.cam0_var.set(display_names[0])
-    self.cam1_var.set(display_names[1] if len(display_names) > 1 else display_names[0])
-
-    self.scan_status.configure(
-      text=f"Found {len(cameras)} camera(s).",
-      text_color="green"
-    )
+    self.controller.on_scan_cameras()
   
   def _on_camera_save(self):
     """Save selected cameras to yaml via controller."""
@@ -502,7 +477,29 @@ class MainWindow(ctk.CTk):
     ctk_img = ctk.CTkImage(Image.fromarray(rgb), size=(w, h))
     self.cam1_label.configure(image=ctk_img, text="")
     self.cam1_label.image = ctk_img
+    
+  def update_camera_list(self, cameras:list):
+    """Populate camera dropdown with detected cameras."""
+    if not cameras:
+      self.scan_status.configure(
+        text="No cameras found. Check connections.",
+        text_color="red"
+      )
+      return
 
+    self._available_cameras = cameras
+    display_names = [c["display"] for c in cameras]
+
+    self.cam0_dropdown.configure(values=display_names, state="normal")
+    self.cam1_dropdown.configure(values=display_names, state="normal")
+
+    self.cam0_var.set(display_names[0])
+    self.cam1_var.set(display_names[1] if len(display_names) > 1 else display_names[0])
+
+    self.scan_status.configure(
+      text=f"Found {len(cameras)} camera(s).",
+      text_color="green"
+    )
     
   def update_3d_plot(self, landmarks_3d: np.ndarray):
     """Update the 3D plot with new landmark coordinates."""
