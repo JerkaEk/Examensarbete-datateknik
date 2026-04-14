@@ -1,6 +1,9 @@
 import logging
+import time
+import queue
+import threading
+
 from camera.camera_capture import open_camera
-from calibration.auto_settings import generate_yaml, load_yaml
 from core.model import Model
 from utils.utils_io import load_yaml, save_yaml
 
@@ -124,43 +127,76 @@ class Controller:
     self.cam1 = open_camera(self.cam1_id)
     self.preview_active = True
     log.info("Preview Started")
+    
+    self._frame_queue = queue.Queue(maxsize=2)
+    
+    self._fps_count = 0
+    self._fps_t0 = time.time()
+    self._model_fps_count = 0
+    self._model_fps_t0 = time.time()
+    
+    self._model_thread = threading.Thread(target=self._model_loop, daemon=True)
+    self._model_thread.start()
     self._poll_frames()
     
-  def _stop_preview(self):
-    """Stop frame polling and release cameras."""
-    self.preview_active = False
-    if self.cam0:
-      self.cam0.release()
-      self.cam0 = None
-    if self.cam1:
-      self.cam1.release()
-      self.cam1 = None
-    log.info("Preview stopped")
-    
-  def _poll_frames(self):
-    """Read one frame from each camera and send to GUI. Reschedules itself."""
-    if not self.preview_active:
-      return
-    
-    ret0, frame0 = self.cam0.read()
-    ret1, frame1 = self.cam1.read()
-
-    if ret0 and ret1:
-        result = self.model.process(frame0, frame1)
-        self.gui.update_cam0(result["frame_left"])
-        self.gui.update_cam1(result["frame_right"])
+    def _model_loop(self):
+        """Run model in separate thread"""
+        while self.preview_active:
+            try:
+                frame0, frame1 = self._frame_queue.get(timeout=1)
+                result = self.model.process(frame0, frame1)
+                self.gui.after(0, lambda r=result: self._update_gui(r))
+            except queue.Empty:
+                continue
+                
+    def _update_gui(self, result):
+        """Update GUI with model results. Called from GUI thread."""
         self.gui.update_3d_plot(result["landmarks_3d"])
         
-    else:
-      if not ret0:
-        log.warning("Failed to read frame from cam0")
-      if not ret1:
-        log.warning("Failed to read frame from cam1")
-
-    self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
+    def _stop_preview(self):
+        """Stop frame polling and release cameras."""
+        self.preview_active = False
+        if self.cam0:
+            self.cam0.release()
+            self.cam0 = None
+        if self.cam1:
+            self.cam1.release()
+            self.cam1 = None
+        log.info("Preview stopped")
     
-  def _start_gui(self):
-    """Create and launch the main window."""
-    from gui.gui_new import MainWindow
-    self.gui = MainWindow(controller=self)
-    self.gui.run()
+    def _poll_frames(self):
+        """Read one frame from each camera and send to GUI. Reschedules itself."""
+        if not self.preview_active:
+            return
+
+        ret0, frame0 = self.cam0.read()
+        ret1, frame1 = self.cam1.read()
+
+        # Poll FPS
+        self._fps_count += 1
+        elapsed = time.time() - self._fps_t0
+        if elapsed >= 2.0:
+            log.info(f"Poll FPS: {self._fps_count / elapsed:.1f}")
+            self._fps_count = 0
+            self._fps_t0 = time.time()
+
+        if ret0 and ret1:
+            try:
+                self._frame_queue.put_nowait((frame0, frame1))
+            except queue.Full:
+                pass
+            self.gui.update_cam0(frame0)
+            self.gui.update_cam1(frame1)
+        else:
+            if not ret0:
+                log.warning("Failed to read frame from cam0")
+            if not ret1:
+                log.warning("Failed to read frame from cam1")
+
+        self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
+    
+    def _start_gui(self):
+      """Create and launch the main window."""
+      from gui.gui_new import MainWindow
+      self.gui = MainWindow(controller=self)
+      self.gui.run()
