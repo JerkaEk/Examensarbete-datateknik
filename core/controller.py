@@ -146,7 +146,7 @@ class Controller:
         result = self.model.process(frame0, frame1)
         self.gui.update_cam0(result["frame_left"])
         self.gui.update_cam1(result["frame_right"])
-        # self.gui.update_3d_plot will go here
+        self.gui.update_3d_plot(result["landmarks_3d"])
         
     else:
       if not ret0:
