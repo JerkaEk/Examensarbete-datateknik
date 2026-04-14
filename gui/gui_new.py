@@ -502,9 +502,15 @@ class MainWindow(ctk.CTk):
     ctk_img = ctk.CTkImage(Image.fromarray(rgb), size=(w, h))
     self.cam1_label.configure(image=ctk_img, text="")
     self.cam1_label.image = ctk_img
+
     
   def update_3d_plot(self, landmarks_3d: np.ndarray):
     """Update the 3D plot with new landmark coordinates."""
+    valid = np.isfinite(landmarks_3d).all(axis=1)
+    log.debug(f"Valid landmarks: {valid.sum()}/33")
+    if valid.sum() > 0:
+        log.debug(f"landmarks_3d min/max: {landmarks_3d[valid].min():.1f} /{landmarks_3d[valid].max():.1f}")
+
     CONNECTIONS = [
         (0, 11), (0, 12),
         (11, 13), (13, 15),
