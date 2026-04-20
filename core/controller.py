@@ -175,7 +175,9 @@ class Controller:
         self._fps_count += 1
         elapsed = time.time() - self._fps_t0
         if elapsed >= 2.0:
-            log.info(f"Poll FPS: {self._fps_count / elapsed:.1f}")
+            poll_fps = self._fps_count / elapsed
+            log.info(f"Poll FPS: {poll_fps:.1f}")
+            self.gui.update_fps(poll_fps, self._last_model_fps)
             self._fps_count = 0
             self._fps_t0 = time.time()
 
