@@ -1,4 +1,5 @@
 import logging
+import os
 
 import customtkinter as ctk
 import matplotlib.pyplot as plt
@@ -75,6 +76,14 @@ class MainWindow(ctk.CTk):
     )
     self.btn_calibrate.pack(side="left", padx=10, pady=8)
     
+    self.calibration_status_label = ctk.CTkLabel(
+      self.topbar,
+      text="Cameras not calibrated",
+      text_color="gray50",
+      font=ctk.CTkFont(size=12),
+    )
+    self.calibration_status_label.pack(side="right", padx=10)
+    
   def _build_content(self):
     # Outer container under top bar
     self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -107,8 +116,16 @@ class MainWindow(ctk.CTk):
   def _build_plot_area(self):
     self.plot_frame = ctk.CTkFrame(self.main)
     self.plot_frame.grid(row=0, column=0, sticky="nsew")
+    
+    self.plot_fps_label = ctk.CTkLabel(
+        self.plot_frame,
+        text="-- fps",
+        text_color="gray50",
+        font=ctk.CTkFont(size=11),
+    )
+    self.plot_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
 
-    # Matplotlib figure med mörk bakgrund
+    # Matplotlib figure
     self.fig = plt.Figure(facecolor="#2b2b2b")
     self.ax = self.fig.add_subplot(111, projection="3d")
     self._style_3d_axes()
@@ -139,6 +156,14 @@ class MainWindow(ctk.CTk):
     )
     
     self.cam0_label.place(relx=0.5, rely=0.5, anchor="center")
+    
+    self.cam0_fps_label = ctk.CTkLabel(     
+        self.cam0_frame,
+        text="-- fps",
+        text_color="gray50",
+        font=ctk.CTkFont(size=11),
+    )
+    self.cam0_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
 
     # Cam 1
     self.cam1_frame = ctk.CTkFrame(self.camera_column)
@@ -150,7 +175,50 @@ class MainWindow(ctk.CTk):
       text_color="gray50",
       font=ctk.CTkFont(size=14),
     )
+    
+    self.cam1_fps_label = ctk.CTkLabel(    
+        self.cam1_frame,
+        text="-- fps",
+        text_color="gray50",
+        font=ctk.CTkFont(size=11),
+    )
+    self.cam1_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
+
+    
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
+    
+  def _show_calibration_warning(self):
+    """Show warning popup if calibration files already exist."""
+    dialog = ctk.CTkToplevel(self)
+    dialog.title("Calibration files found")
+    dialog.geometry("380x160")
+    dialog.resizable(False, False)
+    dialog.grab_set()
+
+    ctk.CTkLabel(
+      dialog,
+      text="Calibration files already exist.\nDo you want to run a new calibration?",
+      font=ctk.CTkFont(size=13),
+      justify="center",
+    ).pack(pady=(24, 16))
+
+    btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+    btn_row.pack(fill="x", padx=24)
+
+    ctk.CTkButton(
+      btn_row,
+      text="New calibration",
+      command=lambda: [dialog.destroy(), self.controller.on_calibrate_clicked()],
+    ).pack(side="left", expand=True, fill="x", padx=(0, 8))
+
+    ctk.CTkButton(
+      btn_row,
+      text="Cancel",
+      fg_color="gray30",
+      hover_color="gray40",
+      command=dialog.destroy,
+    ).pack(side="left", expand=True, fill="x")
+    
     
   # -------------------------------------------------- #
   # Build Settings Panels
@@ -437,7 +505,10 @@ class MainWindow(ctk.CTk):
   
   def _on_calibrate(self):
     log.info("Calibrate clicked")
-    self.controller.on_calibrate_clicked() 
+    if os.path.exists("camera/camera_parameters/camera0_intrinsics.dat"):
+      self._show_calibration_warning()
+    else:
+      self.controller.on_calibrate_clicked()
     
   def _on_reset_view(self):
     self.ax.view_init(elev=20, azim=-60)  # matplotlib default
@@ -530,6 +601,12 @@ class MainWindow(ctk.CTk):
 
     self.canvas.draw()
     
+  def update_fps(self, poll_fps: float, model_fps: float):
+    """Display live FPS on camera previews and 3D plot."""
+    self.cam0_fps_label.configure(text=f"{poll_fps:.0f} fps")
+    self.cam1_fps_label.configure(text=f"{poll_fps:.0f} fps")
+    self.plot_fps_label.configure(text=f"{model_fps:.0f} fps")
+    
   def populate_settings(self, values: dict):
     """Populate calibration settings fields with values from a dict."""
     for setting in CALIBRATION_SETTINGS:
@@ -543,7 +620,7 @@ class MainWindow(ctk.CTk):
   def show_calibration_status(self, message: str):
     """Display a calibration status message in the GUI."""
     log.info(f"Calibration status: {message}")
-    # TODO: visa i GUI
+    self.calibration_status_label.configure(text=message)
  
   def show_error(self, message: str):
     """Display an error message in the GUI."""  

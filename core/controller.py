@@ -66,6 +66,7 @@ class Controller:
 
         if success:
             log.info("Calibration complete")
+            self.gui.show_calibration_status("Cameras calibrated")
         else:
             log.error("Calibration failed")
 
@@ -175,7 +176,9 @@ class Controller:
         self._fps_count += 1
         elapsed = time.time() - self._fps_t0
         if elapsed >= 2.0:
-            log.info(f"Poll FPS: {self._fps_count / elapsed:.1f}")
+            poll_fps = self._fps_count / elapsed
+            log.info(f"Poll FPS: {poll_fps:.1f}")
+            self.gui.update_fps(poll_fps, self._last_model_fps)
             self._fps_count = 0
             self._fps_t0 = time.time()
 
@@ -198,4 +201,6 @@ class Controller:
       """Create and launch the main window."""
       from gui.gui_new import MainWindow
       self.gui = MainWindow(controller=self)
+      if self.model.triangulator is not None:
+        self.gui.show_calibration_status("Cameras calibrated")
       self.gui.run()
