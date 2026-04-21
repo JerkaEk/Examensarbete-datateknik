@@ -66,6 +66,7 @@ class Controller:
 
         if success:
             log.info("Calibration complete")
+            self.gui.show_calibration_status("Cameras calibrated")
         else:
             log.error("Calibration failed")
 
@@ -200,4 +201,6 @@ class Controller:
       """Create and launch the main window."""
       from gui.gui_new import MainWindow
       self.gui = MainWindow(controller=self)
+      if self.model.triangulator is not None:
+        self.gui.show_calibration_status("Cameras calibrated")
       self.gui.run()

@@ -1,4 +1,5 @@
 import logging
+import os
 
 import customtkinter as ctk
 import matplotlib.pyplot as plt
@@ -74,6 +75,14 @@ class MainWindow(ctk.CTk):
         command=self._on_calibrate,
     )
     self.btn_calibrate.pack(side="left", padx=10, pady=8)
+    
+    self.calibration_status_label = ctk.CTkLabel(
+      self.topbar,
+      text="Cameras not calibrated",
+      text_color="gray50",
+      font=ctk.CTkFont(size=12),
+    )
+    self.calibration_status_label.pack(side="right", padx=10)
     
   def _build_content(self):
     # Outer container under top bar
@@ -177,6 +186,38 @@ class MainWindow(ctk.CTk):
 
     
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
+    
+  def _show_calibration_warning(self):
+    """Show warning popup if calibration files already exist."""
+    dialog = ctk.CTkToplevel(self)
+    dialog.title("Calibration files found")
+    dialog.geometry("380x160")
+    dialog.resizable(False, False)
+    dialog.grab_set()
+
+    ctk.CTkLabel(
+      dialog,
+      text="Calibration files already exist.\nDo you want to run a new calibration?",
+      font=ctk.CTkFont(size=13),
+      justify="center",
+    ).pack(pady=(24, 16))
+
+    btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+    btn_row.pack(fill="x", padx=24)
+
+    ctk.CTkButton(
+      btn_row,
+      text="New calibration",
+      command=lambda: [dialog.destroy(), self.controller.on_calibrate_clicked()],
+    ).pack(side="left", expand=True, fill="x", padx=(0, 8))
+
+    ctk.CTkButton(
+      btn_row,
+      text="Cancel",
+      fg_color="gray30",
+      hover_color="gray40",
+      command=dialog.destroy,
+    ).pack(side="left", expand=True, fill="x")
     
     
   # -------------------------------------------------- #
@@ -464,7 +505,10 @@ class MainWindow(ctk.CTk):
   
   def _on_calibrate(self):
     log.info("Calibrate clicked")
-    self.controller.on_calibrate_clicked() 
+    if os.path.exists("camera/camera_parameters/camera0_intrinsics.dat"):
+      self._show_calibration_warning()
+    else:
+      self.controller.on_calibrate_clicked()
     
   def _on_reset_view(self):
     self.ax.view_init(elev=20, azim=-60)  # matplotlib default
@@ -576,7 +620,7 @@ class MainWindow(ctk.CTk):
   def show_calibration_status(self, message: str):
     """Display a calibration status message in the GUI."""
     log.info(f"Calibration status: {message}")
-    # TODO: visa i GUI
+    self.calibration_status_label.configure(text=message)
  
   def show_error(self, message: str):
     """Display an error message in the GUI."""  
