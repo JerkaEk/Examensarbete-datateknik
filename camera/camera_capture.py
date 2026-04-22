@@ -43,6 +43,15 @@ def open_camera(camera_id, width=1920, height=1080):
   Try cv.VideoCapture first (USB) with PiCameraCapture as fallback(CSI).
   Returns a camera object with read() and release() interface.
   """
+  # Video file
+  if isinstance(camera_id, str) and camera_id.endswith((".mp4", ".avi", ".mkv")):
+        cap = cv.VideoCapture(camera_id)
+        if cap.isOpened():
+            log.info(f"Opened video file: {camera_id}")
+            return cap
+        log.error(f"Could not open video file: {camera_id}")
+        return None
+  
   # Linux - Check if USB camera
   if isinstance(camera_id, str) and (camera_id.startswith("/dev/video")):
     # Try to open with OpenCV
