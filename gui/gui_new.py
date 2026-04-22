@@ -591,6 +591,25 @@ class MainWindow(ctk.CTk):
       text_color="green"
     )
     
+  def preselect_cameras(self, cam0: dict, cam1: dict):
+    """Pre-populate camera dropdowns with previously saved selection."""
+    if not self._camera_settings_built:
+      self._build_camera_settings_panel()
+      self._camera_settings_built = True
+
+    displays = [cam0["display"], cam1["display"]]
+    self._available_cameras = [cam0, cam1]
+
+    self.cam0_dropdown.configure(values=displays, state="normal")
+    self.cam1_dropdown.configure(values=displays, state="normal")
+    self.cam0_var.set(cam0["display"])
+    self.cam1_var.set(cam1["display"])
+
+    self.scan_status.configure(
+      text="Loaded saved cameras. Press scan to refresh.",
+      text_color="gray50",
+    )
+    
   def update_3d_plot(self, landmarks_3d: np.ndarray):
     """Update the 3D plot with new landmark coordinates."""
     valid = np.isfinite(landmarks_3d).all(axis=1)

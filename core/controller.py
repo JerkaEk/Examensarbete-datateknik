@@ -117,9 +117,30 @@ class Controller:
         settings = load_yaml("calibration_settings.yaml")
         settings["camera0"] = cam0["id"]
         settings["camera1"] = cam1["id"]
+        settings["camera0_display"] = cam0["display"]
+        settings["camera1_display"] = cam1["display"]
         save_yaml(settings, "calibration_settings.yaml")
         
-        self._start_preview()    
+        self._start_preview()
+        
+    def _restore_camera_selection(self):
+        settings = load_yaml("calibration_settings.yaml")
+        cam0_id = settings.get("camera0")
+        cam1_id = settings.get("camera1")
+        cam0_display = settings.get("camera0_display")
+        cam1_display = settings.get("camera1_display")
+
+        if not all([cam0_id, cam1_id, cam0_display, cam1_display]):
+            log.debug("No saved camera selection found")
+            return
+
+        cam0 = {"id": cam0_id, "display": cam0_display}
+        cam1 = {"id": cam1_id, "display": cam1_display}
+        
+        self.cam0_id = cam0_id
+        self.cam1_id = cam1_id
+        self.gui.preselect_cameras(cam0, cam1)
+        self._start_preview()
     
     def _start_preview(self):
         """Open cameras and begin polling frames."""
@@ -204,9 +225,10 @@ class Controller:
         self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
     
     def _start_gui(self):
-      """Create and launch the main window."""
-      from gui.gui_new import MainWindow
-      self.gui = MainWindow(controller=self)
-      if self.model.triangulator is not None:
-        self.gui.show_calibration_status("Cameras calibrated")
-      self.gui.run()
+        """Create and launch the main window."""
+        from gui.gui_new import MainWindow
+        self.gui = MainWindow(controller=self)
+        if self.model.triangulator is not None:
+            self.gui.show_calibration_status("Cameras calibrated")
+        self._restore_camera_selection()
+        self.gui.run()

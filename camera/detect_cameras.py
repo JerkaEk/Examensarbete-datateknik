@@ -1,5 +1,7 @@
 import subprocess
 import logging
+import sys
+import cv2 as cv
 
 from typing import List, Dict
 
@@ -21,6 +23,7 @@ def detect_all_cameras() -> List[Dict]:
   log.info("Scanning for cameras...")
   csi_cameras = _detect_csi_camera()
   usb_cameras = _detect_usb_camera()
+  
   all_cameras = csi_cameras + usb_cameras
   
   if not all_cameras:
@@ -59,8 +62,13 @@ def _detect_csi_camera() -> List[Dict]:
   return cameras
 
 def _detect_usb_camera() -> List[Dict]:
+  if sys.platform == "win32":
+    return _detect_usb_camera_windows()
+  return _detect_usb_camera_linux()
+
+def _detect_usb_camera_linux() -> List[Dict]:
   """
-  Detects any cameras connected via USB.
+  Detects any cameras connected via USB on Linux.
   Returns a list of dicts with camera info.
   """
   cameras = []
@@ -93,4 +101,24 @@ def _detect_usb_camera() -> List[Dict]:
             })
   except Exception as e:
     log.warning(f"Could not detect any USB cameras:{e}")
+  return cameras
+
+def _detect_usb_camera_windows() -> List[Dict]:
+  """
+  Detects any cameras connected via USB on Windows.
+  Returns a list of dicts with camera info.
+  """
+  cameras = []
+  for i in range(6):
+    cap = cv.VideoCapture(i)
+    if cap.isOpened():
+      ret, _ = cap.read()  # Confirm it returns frames
+      if ret:
+        cameras.append({
+          "id": i,
+          "type": "USB",
+          "model": f"Camera {i}",
+          "display": f"USB camera {i} (Camera {i})"
+        })
+        cap.release()
   return cameras
