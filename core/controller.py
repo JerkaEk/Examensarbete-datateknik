@@ -6,6 +6,7 @@ import threading
 from camera.camera_capture import open_camera
 from core.model import Model
 from utils.utils_io import load_yaml, save_yaml
+from core.performance_logger import PerformanceLogger
 
 #from calibration import calibration, auto_settings
 #from pose_estimaiton import pose2d_extractor, triangulate3d #?
@@ -35,6 +36,8 @@ class Controller:
         # Model
         self.model = Model()
         
+        self.perf = PerformanceLogger()
+        
         log.debug("Controller initialized")
     
     def run(self):
@@ -47,6 +50,9 @@ class Controller:
         log.info("Shutting down")
         if self.preview_active:
             self._stop_preview()
+            
+        self.perf.close()
+        self.model.perf.close()
         
         # Close all process threads here.     
 
@@ -195,8 +201,16 @@ class Controller:
         if not self.preview_active:
             return
 
+        t0 = time.perf_counter()
         ret0, frame0 = self.cam0.read()
+        t1 = time.perf_counter()
         ret1, frame1 = self.cam1.read()
+        t2 = time.perf_counter()
+        
+        self.perf.record(
+            cam0_read_ms = (t1 - t0) * 1000,
+            cam1_read_ms = (t2 - t1) * 1000,
+        )
 
         # Poll FPS
         self._fps_count += 1
