@@ -43,6 +43,7 @@ class MainWindow(ctk.CTk):
     self._calibration_settings_built = False
     
     self._available_cameras = []
+    self._preview_visible = True
     
     self._build_topbar()
     self._build_content()
@@ -141,7 +142,15 @@ class MainWindow(ctk.CTk):
         width=100,
         command=self._on_reset_view,
     )
-    self.btn_reset_view.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
+    self.btn_reset_view.place(relx=0.0, rely=1.0, anchor="sw", x=140, y=-8)
+    
+    self.btn_toggle_preview = ctk.CTkButton(
+        self.plot_frame,
+        text="Hide preview",
+        width=120,
+        command=self._on_toggle_preview,
+    )
+    self.btn_toggle_preview.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
     
   def _build_camera_preview(self):
     # Cam 0
@@ -498,6 +507,16 @@ class MainWindow(ctk.CTk):
       self._build_calibration_settings_panel()
       self._calibration_settings_built = True
     self._set_panel(self.calibration_settings_panel, self._calibration_settings_panel_open)
+    
+  def _on_toggle_preview(self):
+    self._preview_visible = not self._preview_visible
+    if self._preview_visible:
+      self.camera_column.pack(side="left", fill="y", padx=(8, 4), pady=8, before=self.main)
+      self.btn_toggle_preview.configure(text="Hide preview")
+    else:
+      self.camera_column.pack_forget()
+      self.btn_toggle_preview.configure(text="Show preview")
+    self.controller.on_preview_visibility(self._preview_visible)
     
   # -------------------------------------------------- #
   # Button Events

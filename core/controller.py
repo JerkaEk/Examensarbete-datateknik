@@ -22,6 +22,7 @@ class Controller:
         
         # State 
         self.preview_active = False
+        self._show_preview = True
         self.gui = None
         self.calibration_running = False
         
@@ -163,6 +164,10 @@ class Controller:
             self.cam1.release()
             self.cam1 = None
         log.info("Preview stopped")
+        
+    def on_preview_visibility(self, visible: bool):
+        """Stop or resume sending frames to camera previews."""
+        self._show_preview = visible
     
     def _poll_frames(self):
         """Read one frame from each camera and send to GUI. Reschedules itself."""
@@ -187,8 +192,9 @@ class Controller:
                 self._frame_queue.put_nowait((frame0, frame1))
             except queue.Full:
                 pass
-            self.gui.update_cam0(frame0)
-            self.gui.update_cam1(frame1)
+            if self._show_preview:
+                self.gui.update_cam0(frame0)
+                self.gui.update_cam1(frame1)
         else:
             if not ret0:
                 log.warning("Failed to read frame from cam0")
