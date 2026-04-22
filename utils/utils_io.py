@@ -9,6 +9,7 @@ Light-weight helpers for reading / writing JSON and camera-parameter files.
 import yaml
 import json
 import logging
+import csv
 
 import numpy as np
 
@@ -91,3 +92,17 @@ def save_yaml(data: Dict, path: str) -> Dict:
     with open(path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     log.info(f"Saved to '{path}'")
+    
+def save_csv(data: list[dict], path: str) -> None:
+    """Save a list of dicts to a CSV file."""
+    if not data:
+        return
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=data[0].keys())
+        writer.writeheader()
+        writer.writerows(data)
+    log.info(f"CSV saved to {path}")
+
+def append_csv_row(writer: csv.writer, row: list) -> None:
+    """Append a single row to an already-open CSV writer."""
+    writer.writerow(row)
