@@ -22,7 +22,7 @@ from pathlib import Path
 from utils.utils_io import save_json
 
 log = logging.getLogger(__name__)
-
+VISIBILITY_THRESHOLD = 0.5
 
 # ──────────────────────────────────────────────────────────────────────────── #
 # Mediapipe pose helper
@@ -39,7 +39,7 @@ def detect_landmarks(frame, pose) -> List[Dict] | None:
     res = pose.process(rgb)
     if not res.pose_landmarks:
         return None
-    return [{"x": lm.x, "y": lm.y, "z": lm.z} for lm in res.pose_landmarks.landmark]
+    return [{"x": lm.x, "y": lm.y, "z": lm.z, "visibility": lm.visibility} for lm in res.pose_landmarks.landmark]
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -97,8 +97,12 @@ class Pose2DEstimator:
         if landmarks is None:
             log.debug("No pose detected in frame")
             return np.full((33, 2), np.nan, dtype=np.float32)
-        return np.array([[lm["x"] * w, lm["y"] * h] for lm in landmarks],
-                        dtype=np.float32)
+        
+        result = np.full((33, 2), np.nan, dtype=np.float32)
+        for i, lm in enumerate(landmarks):
+            if lm["visibility"] >= VISIBILITY_THRESHOLD:
+                result[i] = [lm["x"] * w, lm["y"] * h]
+        return result
         
     def close(self):
         self.pose.close()
