@@ -3,6 +3,8 @@ import time
 import queue
 import threading
 
+import cv2 as cv
+
 from camera.camera_capture import open_camera
 from core.model import Model
 from utils.utils_io import load_yaml, save_yaml
@@ -22,6 +24,7 @@ class Controller:
         self.mock_cameras = mock_cameras
         
         # State 
+        self.mode = "camera"    # camera/video
         self.preview_active = False
         self._show_preview = True
         self.gui = None
@@ -32,6 +35,10 @@ class Controller:
         self.cam1_id = None
         self.cam0 = None
         self.cam1 = None
+        
+        # Video
+        self.video0_path = None
+        self.video1_path = None
 
         # Model
         self.model = Model()
@@ -107,6 +114,24 @@ class Controller:
         from camera.detect_cameras import detect_all_cameras
         cameras = detect_all_cameras()    
         self.gui.update_camera_list(cameras)
+        
+    def on_video_paths_saved(self, path0: str, path1: str):
+        """Called by GUI when user selects video files."""
+        self.video0_path = path0
+        self.video1_path = path1
+        self.mode = "video"
+        log.info(f"Video mode: {path0}, {path1}")
+        if self.preview_active:
+            self._stop_preview()
+        self._start_preview()
+        
+    def on_switch_to_camera_mode(self):
+        """Called by GUI when user switches back to camera mode."""
+        self.mode = "camera"
+        if self.preview_active:
+            self._stop_preview()
+        if self.cam0_id and self.cam1_id:
+            self._start_preview()
     
     # Send to GUI
     
@@ -149,30 +174,48 @@ class Controller:
         self._start_preview()
     
     def _start_preview(self):
-        """Open cameras and begin polling frames."""
-        log.info(f"Opening cameras: cam0={self.cam0_id}, cam1={self.cam1_id}")
-        self.cam0 = open_camera(self.cam0_id)
-        self.cam1 = open_camera(self.cam1_id)
+        if self.mode == "video":
+            cam0_id = self.video0_path
+            cam1_id = self.video1_path
+        else:
+            cam0_id = self.cam0_id
+            cam1_id = self.cam1_id
+
+        log.info(f"Opening: {cam0_id}, {cam1_id}")
+        self.cam0 = open_camera(cam0_id)
+        self.cam1 = open_camera(cam1_id)
+
+        if not self.cam0 or not self.cam1:
+            log.error("Could not open cameras/videos")
+            return
+
         self.preview_active = True
-        log.info("Preview Started")
-        
         self._frame_queue = queue.Queue(maxsize=2)
-        
         self._fps_count = 0
         self._fps_t0 = time.time()
-        self._model_fps_count = 0
-        self._model_fps_t0 = time.time()
-        
+        self._last_model_fps = 0
+
         self._model_thread = threading.Thread(target=self._model_loop, daemon=True)
         self._model_thread.start()
         self._poll_frames()
     
     def _model_loop(self):
         """Run model in separate thread"""
+        model_fps_count = 0
+        model_fps_t0 = time.time()
+        
         while self.preview_active:
             try:
                 frame0, frame1 = self._frame_queue.get(timeout=1)
                 result = self.model.process(frame0, frame1)
+                
+                model_fps_count += 1
+                elapsed = time.time() - model_fps_t0
+                if elapsed >= 2.0:
+                    self._last_model_fps = model_fps_count / elapsed
+                    model_fps_count = 0
+                    model_fps_t0 = time.time()
+                
                 self.gui.after(0, lambda r=result: self._update_gui(r))
             except queue.Empty:
                 continue
@@ -211,6 +254,17 @@ class Controller:
             cam0_read_ms = (t1 - t0) * 1000,
             cam1_read_ms = (t2 - t1) * 1000,
         )
+        
+        if not ret0 or not ret1:
+            if self.mode == "video":
+                log.info("Video ended, looping")
+                self.cam0.set(cv.CAP_PROP_POS_FRAMES, 0)
+                self.cam1.set(cv.CAP_PROP_POS_FRAMES, 0)
+            else:
+                if not ret0: log.warning("Failed to read frame from cam0")
+                if not ret1: log.warning("Failed to read frame from cam1")
+            self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
+            return
 
         # Poll FPS
         self._fps_count += 1
@@ -222,19 +276,13 @@ class Controller:
             self._fps_count = 0
             self._fps_t0 = time.time()
 
-        if ret0 and ret1:
-            try:
-                self._frame_queue.put_nowait((frame0, frame1))
-            except queue.Full:
-                pass
-            if self._show_preview:
-                self.gui.update_cam0(frame0)
-                self.gui.update_cam1(frame1)
-        else:
-            if not ret0:
-                log.warning("Failed to read frame from cam0")
-            if not ret1:
-                log.warning("Failed to read frame from cam1")
+        try:
+            self._frame_queue.put_nowait((frame0, frame1))
+        except queue.Full:
+            pass
+        if self._show_preview:
+            self.gui.update_cam0(frame0)
+            self.gui.update_cam1(frame1)
 
         self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
     
