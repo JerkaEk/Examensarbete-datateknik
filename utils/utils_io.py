@@ -10,8 +10,10 @@ import yaml
 import json
 import logging
 import csv
+import os
 
 import numpy as np
+import cv2 as cv
 
 from pathlib import Path
 from typing import Tuple, Dict, List
@@ -106,3 +108,11 @@ def save_csv(data: list[dict], path: str) -> None:
 def append_csv_row(writer: csv.writer, row: list) -> None:
     """Append a single row to an already-open CSV writer."""
     writer.writerow(row)
+    
+def create_video_writers(timestamp: str, size0: tuple, size1: tuple):
+    """Create VideoWriter objects for both cameras."""
+    os.makedirs("recordings", exist_ok=True)
+    fourcc = cv.VideoWriter_fourcc(*"XVID")
+    writer0 = cv.VideoWriter(f"recordings/cam0_{timestamp}.avi", fourcc, 30, size0)
+    writer1 = cv.VideoWriter(f"recordings/cam1_{timestamp}.avi", fourcc, 30, size1)
+    return writer0, writer1
