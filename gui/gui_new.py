@@ -186,6 +186,19 @@ class MainWindow(ctk.CTk):
         font=ctk.CTkFont(size=11),
     )
     self.cam0_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
+    
+    self.rec_btn_cam0 = ctk.CTkButton(
+    self.cam0_frame,
+    text="⏺ REC",
+    width=70,
+    fg_color="red",
+    hover_color="#cc0000",
+    command=self._on_toggle_recording,
+)
+# Dölj initialt
+# self.rec_btn_cam0.place(...)  — placeras inte än
+    
+    
 
     # Cam 1
     self.cam1_frame = ctk.CTkFrame(self.camera_column)
@@ -205,9 +218,17 @@ class MainWindow(ctk.CTk):
         font=ctk.CTkFont(size=11),
     )
     self.cam1_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
-
     
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
+    
+    self.rec_btn_cam1 = ctk.CTkButton(
+    self.cam1_frame,
+    text="⏺ REC",
+    width=70,
+    fg_color="red",
+    hover_color="#cc0000",
+    command=self._on_toggle_recording,
+    )
     
   def _show_calibration_warning(self):
     """Show warning popup if calibration files already exist."""
@@ -609,6 +630,14 @@ class MainWindow(ctk.CTk):
       self.btn_toggle_preview.configure(text="Show preview")
     self.controller.on_preview_visibility(self._preview_visible)
     
+  def _update_rec_buttons(self):
+    if self._video_settings_panel_open:
+        self.rec_btn_cam0.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
+        self.rec_btn_cam1.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
+    else:
+        self.rec_btn_cam0.place_forget()
+        self.rec_btn_cam1.place_forget()
+    
   # -------------------------------------------------- #
   # Event Handlers
   # -------------------------------------------------- #
@@ -640,6 +669,7 @@ class MainWindow(ctk.CTk):
         self._build_video_settings_panel()
         self._video_settings_built = True
     self._set_panel(self.video_settings_panel, self._video_settings_panel_open)
+    self._update_rec_buttons()
 
   def _on_browse_video(self, cam_index: int):
     from tkinter import filedialog
@@ -663,7 +693,18 @@ class MainWindow(ctk.CTk):
   def _on_switch_to_camera_mode(self):
     self._video_settings_panel_open = False
     self._set_panel(self.video_settings_panel, False)
+    self._update_rec_buttons()
     self.controller.on_switch_to_camera_mode()
+    
+  def _on_toggle_recording(self):
+    self.controller.on_toggle_recording()
+
+  def update_recording_state(self, recording: bool):
+      """Update rec button appearance based on recording state."""
+      text = "⏹ STOP" if recording else "⏺ REC"
+      fg = "#cc0000" if recording else "red"
+      self.rec_btn_cam0.configure(text=text, fg_color=fg)
+      self.rec_btn_cam1.configure(text=text, fg_color=fg)
   
   # -------------------------------------------------- # 
   # Public API

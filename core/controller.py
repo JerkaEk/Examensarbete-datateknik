@@ -7,11 +7,9 @@ import cv2 as cv
 
 from camera.camera_capture import open_camera
 from core.model import Model
-from utils.utils_io import load_yaml, save_yaml
+from utils.utils_io import load_yaml, save_yaml, create_video_writers
 from core.performance_logger import PerformanceLogger
-
-#from calibration import calibration, auto_settings
-#from pose_estimaiton import pose2d_extractor, triangulate3d #?
+from datetime import datetime
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +37,11 @@ class Controller:
         # Video
         self.video0_path = None
         self.video1_path = None
+        
+        # Recording
+        self._writer0 = None
+        self._writer1 = None
+        self._recording = False
 
         # Model
         self.model = Model()
@@ -57,6 +60,9 @@ class Controller:
         log.info("Shutting down")
         if self.preview_active:
             self._stop_preview()
+            
+        if self._recording:
+            self.stop_recording()
             
         self.perf.close()
         self.model.perf.close()
@@ -132,7 +138,30 @@ class Controller:
             self._stop_preview()
         if self.cam0_id and self.cam1_id:
             self._start_preview()
-    
+            
+    def start_recording(self):
+        """Start recording frames from both cameras."""
+        w0 = int(self.cam0.get(cv.CAP_PROP_FRAME_WIDTH))
+        h0 = int(self.cam0.get(cv.CAP_PROP_FRAME_HEIGHT))
+        w1 = int(self.cam1.get(cv.CAP_PROP_FRAME_WIDTH))
+        h1 = int(self.cam1.get(cv.CAP_PROP_FRAME_HEIGHT))
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self._writer0, self._writer1 = create_video_writers(timestamp, (w0, h0), (w1, h1))
+        self._recording = True
+        log.info(f"Recording started: {timestamp}")
+        
+    def stop_recording(self):
+        """Stop recording and release writers."""
+        self._recording = False
+        if self._writer0:
+            self._writer0.release()
+            self._writer0 = None
+        if self._writer1:
+            self._writer1.release()
+            self._writer1 = None
+        log.info("Recording stopped")
+        
     # Send to GUI
     
     # Utilities
@@ -238,6 +267,13 @@ class Controller:
     def on_preview_visibility(self, visible: bool):
         """Stop or resume sending frames to camera previews."""
         self._show_preview = visible
+        
+    def on_toggle_recording(self):
+        if self._recording:
+            self.stop_recording()
+        else:
+            self.start_recording()
+        self.gui.update_recording_state(self._recording)
     
     def _poll_frames(self):
         """Read one frame from each camera and send to GUI. Reschedules itself."""
@@ -255,6 +291,10 @@ class Controller:
             cam1_read_ms = (t2 - t1) * 1000,
         )
         
+        if self._recording and self._writer0 and self._writer1:
+            self._writer0.write(frame0)
+            self._writer1.write(frame1)
+                
         if not ret0 or not ret1:
             if self.mode == "video":
                 log.info("Video ended, looping")
