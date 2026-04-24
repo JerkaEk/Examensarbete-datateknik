@@ -203,6 +203,10 @@ class Controller:
         self._start_preview()
     
     def _start_preview(self):
+        settings = load_yaml("calibration_settings.yaml")
+        w = settings.get("frame_width", 1280)
+        h = settings.get("frame_height", 720)
+        
         if self.mode == "video":
             cam0_id = self.video0_path
             cam1_id = self.video1_path
@@ -211,8 +215,8 @@ class Controller:
             cam1_id = self.cam1_id
 
         log.info(f"Opening: {cam0_id}, {cam1_id}")
-        self.cam0 = open_camera(cam0_id)
-        self.cam1 = open_camera(cam1_id)
+        self.cam0 = open_camera(cam0_id, width=w, height=h)
+        self.cam1 = open_camera(cam1_id, width=w, height=h)
 
         if not self.cam0 or not self.cam1:
             log.error("Could not open cameras/videos")
@@ -276,7 +280,10 @@ class Controller:
         self.gui.update_recording_state(self._recording)
     
     def _poll_frames(self):
-        """Read one frame from each camera and send to GUI. Reschedules itself."""
+        """
+        Read one frame from each camera, send to GUI preview and
+        put into frame_queue for model processing. Reschedules itself.
+        """
         if not self.preview_active:
             return
 
