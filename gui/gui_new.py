@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
-
+from pose_estimation.body_model import CONNECTIONS
 from core.settings_config import CALIBRATION_SETTINGS
 
 log = logging.getLogger(__name__)
@@ -779,16 +779,6 @@ class MainWindow(ctk.CTk):
     log.debug(f"Valid landmarks: {valid.sum()}/33")
     if valid.sum() > 0:
         log.debug(f"landmarks_3d min/max: {landmarks_3d[valid].min():.1f} /{landmarks_3d[valid].max():.1f}")
-
-    CONNECTIONS = [
-        (0, 11), (0, 12),
-        (11, 13), (13, 15),
-        (12, 14), (14, 16),
-        (11, 23), (12, 24),
-        (23, 25), (25, 27),
-        (24, 26), (26, 28),
-        (23, 24), (11, 12),
-    ]
 
     self.ax.clear()
     self._style_3d_axes()
