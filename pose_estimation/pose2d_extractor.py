@@ -20,11 +20,9 @@ import numpy as np
 from typing import List, Dict
 from pathlib import Path
 from utils.utils_io import save_json
-from pose_estimation.body_model import NUM_LANDMARKS, mediapipe_to_body, movenet_to_body
 
 log = logging.getLogger(__name__)
 VISIBILITY_THRESHOLD = 0.5
-MEDIAPIPE_NUM_LANDMARKS = 33
 
 # ──────────────────────────────────────────────────────────────────────────── #
 # Mediapipe pose helper
@@ -84,7 +82,7 @@ class Pose2DEstimator:
     """
     Wraps MediaPipe Pose for live per-frame inference.
     Input:  BGR frame (H, W, 3)
-    Output: (13, 2) pixel coordinates, NaN if no detection
+    Output: (33, 2) pixel coordinates, NaN if no detection
     """
     def __init__(self, model_complexity: int = 0):
         self.pose = mp.solutions.pose.Pose(
@@ -98,15 +96,13 @@ class Pose2DEstimator:
         landmarks = detect_landmarks(frame, self.pose)
         if landmarks is None:
             log.debug("No pose detected in frame")
-            
-            return np.full((NUM_LANDMARKS, 2), np.nan, dtype=np.float32)
-        # This needs to be adjusted to swap pose estimation model accordingly 
-        result = np.full((MEDIAPIPE_NUM_LANDMARKS, 2), np.nan, dtype=np.float32)
+            return np.full((33, 2), np.nan, dtype=np.float32)
+        
+        result = np.full((33, 2), np.nan, dtype=np.float32)
         for i, lm in enumerate(landmarks):
             if lm["visibility"] >= VISIBILITY_THRESHOLD:
                 result[i] = [lm["x"] * w, lm["y"] * h]
-        # This needs to be adjusted to swap pose estimation model accordingly
-        return mediapipe_to_body(result)
+        return result
         
     def close(self):
         self.pose.close()

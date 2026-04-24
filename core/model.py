@@ -7,7 +7,6 @@ import numpy as np
 from pose_estimation.pose2d_extractor import Pose2DEstimator
 from pose_estimation.triangulate3d import Triangulator
 from core.performance_logger import PerformanceLogger
-from pose_estimation.body_model import NUM_LANDMARKS
 from utils.utils_io import load_extrinsics, load_intrinsics
 from collections import deque
 
@@ -49,9 +48,9 @@ class Model:
     Returns dict with:
       frame_left:         (H, W, 3) BGR frame.
       frame_right:        (H, W, 3) BGR frame.
-      landmarks_3d:       (13, 3) float32 XYZ in cm, NaN if unavailable.
-      landmarks_2d_left:  (13, 2) float32 pixel coords cam0.
-      landmarks_2d_right: (13, 2) float32 pixel coords cam1.
+      landmarks_3d:       (33, 3) float32 XYZ in cm, NaN if unavailable.
+      landmarks_2d_left:  (33, 2) float32 pixel coords cam0.
+      landmarks_2d_right: (33, 2) float32 pixel coords cam1.
     """
     # 2D pose estimation
     t0 = time.perf_counter()
@@ -88,7 +87,7 @@ class Model:
     
     """
     if self.triangulator is None:
-      return np.full((NUM_LANDMARKS, 3), np.nan, dtype=np.float32)
+      return np.full((33, 3), np.nan, dtype=np.float32)
     return self.triangulator.triangulate(pts0, pts1)
   
   # Internal functions
