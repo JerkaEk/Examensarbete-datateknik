@@ -33,7 +33,6 @@ class MainWindow(ctk.CTk):
     
     self.title("Stereo 3D Skeleton Tracker")
     self.geometry("1600x900")
-    #self.geometry("1280x720")
     self.minsize(800,500)
     
     self._camera_settings_panel_open = False
@@ -43,6 +42,10 @@ class MainWindow(ctk.CTk):
     self._calibration_settings_built = False
     
     self._available_cameras = []
+    self._preview_visible = True
+    
+    self._video_settings_panel_open = False
+    self._video_settings_built = False
     
     self._build_topbar()
     self._build_content()
@@ -84,6 +87,13 @@ class MainWindow(ctk.CTk):
     )
     self.calibration_status_label.pack(side="right", padx=10)
     
+    self.btn_video_mode = ctk.CTkButton(
+    self.topbar,
+    text="Video mode",
+    command=self._on_video_mode,
+    )
+    self.btn_video_mode.pack(side="left", padx=10, pady=8)
+    
   def _build_content(self):
     # Outer container under top bar
     self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -109,6 +119,10 @@ class MainWindow(ctk.CTk):
     self.main.pack(side="left", fill="both", expand=True, padx=(4, 8), pady=8)
     self.main.rowconfigure(0, weight=1)
     self.main.columnconfigure(0, weight=1)
+    
+    self.video_settings_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
+    self.video_settings_panel.pack(side="left", fill="y")
+    self.video_settings_panel.pack_propagate(False)
     
     self._build_plot_area()
     self._build_camera_preview()
@@ -141,7 +155,15 @@ class MainWindow(ctk.CTk):
         width=100,
         command=self._on_reset_view,
     )
-    self.btn_reset_view.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
+    self.btn_reset_view.place(relx=0.0, rely=1.0, anchor="sw", x=140, y=-8)
+    
+    self.btn_toggle_preview = ctk.CTkButton(
+        self.plot_frame,
+        text="Hide preview",
+        width=120,
+        command=self._on_toggle_preview,
+    )
+    self.btn_toggle_preview.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
     
   def _build_camera_preview(self):
     # Cam 0
@@ -164,6 +186,19 @@ class MainWindow(ctk.CTk):
         font=ctk.CTkFont(size=11),
     )
     self.cam0_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
+    
+    self.rec_btn_cam0 = ctk.CTkButton(
+    self.cam0_frame,
+    text="⏺ REC",
+    width=70,
+    fg_color="red",
+    hover_color="#cc0000",
+    command=self._on_toggle_recording,
+)
+# Dölj initialt
+# self.rec_btn_cam0.place(...)  — placeras inte än
+    
+    
 
     # Cam 1
     self.cam1_frame = ctk.CTkFrame(self.camera_column)
@@ -183,9 +218,17 @@ class MainWindow(ctk.CTk):
         font=ctk.CTkFont(size=11),
     )
     self.cam1_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
-
     
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
+    
+    self.rec_btn_cam1 = ctk.CTkButton(
+    self.cam1_frame,
+    text="⏺ REC",
+    width=70,
+    fg_color="red",
+    hover_color="#cc0000",
+    command=self._on_toggle_recording,
+    )
     
   def _show_calibration_warning(self):
     """Show warning popup if calibration files already exist."""
@@ -360,6 +403,84 @@ class MainWindow(ctk.CTk):
         hover_color="gray40",
         command=self._on_camera_cancel,
     ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+    
+  def _build_video_settings_panel(self):
+    ctk.CTkLabel(
+        self.video_settings_panel,
+        text="Video mode",
+        font=ctk.CTkFont(size=15, weight="bold"),
+    ).pack(pady=(16, 8), padx=16, anchor="w")
+
+    ctk.CTkFrame(self.video_settings_panel, height=1, fg_color="gray30").pack(
+        fill="x", padx=16, pady=(0, 12)
+    )
+
+    # Cam 0
+    ctk.CTkLabel(
+        self.video_settings_panel,
+        text="Video cam 0",
+        font=ctk.CTkFont(size=12),
+    ).pack(padx=16, anchor="w")
+
+    self.video0_var = ctk.StringVar(value="No file selected")
+    self.video0_label = ctk.CTkLabel(
+        self.video_settings_panel,
+        textvariable=self.video0_var,
+        text_color="gray50",
+        font=ctk.CTkFont(size=11),
+        wraplength=SETTINGS_PANEL_WIDTH - 40,
+    )
+    self.video0_label.pack(padx=16, anchor="w")
+
+    ctk.CTkButton(
+        self.video_settings_panel,
+        text="Browse",
+        command=lambda: self._on_browse_video(0),
+    ).pack(padx=16, pady=(4, 12), fill="x")
+
+    # Cam 1
+    ctk.CTkLabel(
+        self.video_settings_panel,
+        text="Video cam 1",
+        font=ctk.CTkFont(size=12),
+    ).pack(padx=16, anchor="w")
+
+    self.video1_var = ctk.StringVar(value="No file selected")
+    self.video1_label = ctk.CTkLabel(
+        self.video_settings_panel,
+        textvariable=self.video1_var,
+        text_color="gray50",
+        font=ctk.CTkFont(size=11),
+        wraplength=SETTINGS_PANEL_WIDTH - 40,
+    )
+    self.video1_label.pack(padx=16, anchor="w")
+
+    ctk.CTkButton(
+        self.video_settings_panel,
+        text="Browse",
+        command=lambda: self._on_browse_video(1),
+    ).pack(padx=16, pady=(4, 0), fill="x")
+
+    ctk.CTkFrame(self.video_settings_panel, height=1, fg_color="gray30").pack(
+        fill="x", padx=16, pady=(16, 0)
+    )
+
+    btn_row = ctk.CTkFrame(self.video_settings_panel, fg_color="transparent")
+    btn_row.pack(fill="x", padx=16, pady=12)
+
+    ctk.CTkButton(
+        btn_row,
+        text="Play",
+        command=self._on_video_play,
+    ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+    ctk.CTkButton(
+        btn_row,
+        text="Camera mode",
+        fg_color="gray30",
+        hover_color="gray40",
+        command=self._on_switch_to_camera_mode,
+    ).pack(side="left", expand=True, fill="x", padx=(4, 0))
       
   # -------------------------------------------------- #
   # Utility for Settings Panels
@@ -499,8 +620,26 @@ class MainWindow(ctk.CTk):
       self._calibration_settings_built = True
     self._set_panel(self.calibration_settings_panel, self._calibration_settings_panel_open)
     
+  def _on_toggle_preview(self):
+    self._preview_visible = not self._preview_visible
+    if self._preview_visible:
+      self.camera_column.pack(side="left", fill="y", padx=(8, 4), pady=8, before=self.main)
+      self.btn_toggle_preview.configure(text="Hide preview")
+    else:
+      self.camera_column.pack_forget()
+      self.btn_toggle_preview.configure(text="Show preview")
+    self.controller.on_preview_visibility(self._preview_visible)
+    
+  def _update_rec_buttons(self):
+    if self._video_settings_panel_open:
+        self.rec_btn_cam0.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
+        self.rec_btn_cam1.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
+    else:
+        self.rec_btn_cam0.place_forget()
+        self.rec_btn_cam1.place_forget()
+    
   # -------------------------------------------------- #
-  # Button Events
+  # Event Handlers
   # -------------------------------------------------- #
   
   def _on_calibrate(self):
@@ -523,6 +662,49 @@ class MainWindow(ctk.CTk):
   def _on_settings_calibration_cancel(self):
     self._calibration_settings_panel_open = False
     self._set_panel(self.calibration_settings_panel, False)
+    
+  def _on_video_mode(self):
+    self._video_settings_panel_open = not self._video_settings_panel_open
+    if self._video_settings_panel_open and not self._video_settings_built:
+        self._build_video_settings_panel()
+        self._video_settings_built = True
+    self._set_panel(self.video_settings_panel, self._video_settings_panel_open)
+    self._update_rec_buttons()
+
+  def _on_browse_video(self, cam_index: int):
+    from tkinter import filedialog
+    path = filedialog.askopenfilename(
+      filetypes=[("Video files", "*.mp4 *.avi *.mkv")]
+    )
+    if path:
+      if cam_index == 0:
+        self.video0_var.set(path)
+      else:
+        self.video1_var.set(path)
+
+  def _on_video_play(self):
+    path0 = self.video0_var.get()
+    path1 = self.video1_var.get()
+    if path0 == "No file selected" or path1 == "No file selected":
+      # TODO: visa felmeddelande
+      return
+    self.controller.on_video_paths_saved(path0, path1)
+
+  def _on_switch_to_camera_mode(self):
+    self._video_settings_panel_open = False
+    self._set_panel(self.video_settings_panel, False)
+    self._update_rec_buttons()
+    self.controller.on_switch_to_camera_mode()
+    
+  def _on_toggle_recording(self):
+    self.controller.on_toggle_recording()
+
+  def update_recording_state(self, recording: bool):
+      """Update rec button appearance based on recording state."""
+      text = "⏹ STOP" if recording else "⏺ REC"
+      fg = "#cc0000" if recording else "red"
+      self.rec_btn_cam0.configure(text=text, fg_color=fg)
+      self.rec_btn_cam1.configure(text=text, fg_color=fg)
   
   # -------------------------------------------------- # 
   # Public API
@@ -570,6 +752,25 @@ class MainWindow(ctk.CTk):
     self.scan_status.configure(
       text=f"Found {len(cameras)} camera(s).",
       text_color="green"
+    )
+    
+  def preselect_cameras(self, cam0: dict, cam1: dict):
+    """Pre-populate camera dropdowns with previously saved selection."""
+    if not self._camera_settings_built:
+      self._build_camera_settings_panel()
+      self._camera_settings_built = True
+
+    displays = [cam0["display"], cam1["display"]]
+    self._available_cameras = [cam0, cam1]
+
+    self.cam0_dropdown.configure(values=displays, state="normal")
+    self.cam1_dropdown.configure(values=displays, state="normal")
+    self.cam0_var.set(cam0["display"])
+    self.cam1_var.set(cam1["display"])
+
+    self.scan_status.configure(
+      text="Loaded saved cameras. Press scan to refresh.",
+      text_color="gray50",
     )
     
   def update_3d_plot(self, landmarks_3d: np.ndarray):

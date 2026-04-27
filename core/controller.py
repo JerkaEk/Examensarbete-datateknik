@@ -3,12 +3,13 @@ import time
 import queue
 import threading
 
+import cv2 as cv
+
 from camera.camera_capture import open_camera
 from core.model import Model
-from utils.utils_io import load_yaml, save_yaml
-
-#from calibration import calibration, auto_settings
-#from pose_estimaiton import pose2d_extractor, triangulate3d #?
+from utils.utils_io import load_yaml, save_yaml, create_video_writers
+from core.performance_logger import PerformanceLogger
+from datetime import datetime
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +22,9 @@ class Controller:
         self.mock_cameras = mock_cameras
         
         # State 
+        self.mode = "camera"    # camera/video
         self.preview_active = False
+        self._show_preview = True
         self.gui = None
         self.calibration_running = False
         
@@ -30,9 +33,20 @@ class Controller:
         self.cam1_id = None
         self.cam0 = None
         self.cam1 = None
+        
+        # Video
+        self.video0_path = None
+        self.video1_path = None
+        
+        # Recording
+        self._writer0 = None
+        self._writer1 = None
+        self._recording = False
 
         # Model
         self.model = Model()
+        
+        self.perf = PerformanceLogger()
         
         log.debug("Controller initialized")
     
@@ -46,6 +60,12 @@ class Controller:
         log.info("Shutting down")
         if self.preview_active:
             self._stop_preview()
+            
+        if self._recording:
+            self.stop_recording()
+            
+        self.perf.close()
+        self.model.perf.close()
         
         # Close all process threads here.     
 
@@ -100,7 +120,48 @@ class Controller:
         from camera.detect_cameras import detect_all_cameras
         cameras = detect_all_cameras()    
         self.gui.update_camera_list(cameras)
-    
+        
+    def on_video_paths_saved(self, path0: str, path1: str):
+        """Called by GUI when user selects video files."""
+        self.video0_path = path0
+        self.video1_path = path1
+        self.mode = "video"
+        log.info(f"Video mode: {path0}, {path1}")
+        if self.preview_active:
+            self._stop_preview()
+        self._start_preview()
+        
+    def on_switch_to_camera_mode(self):
+        """Called by GUI when user switches back to camera mode."""
+        self.mode = "camera"
+        if self.preview_active:
+            self._stop_preview()
+        if self.cam0_id and self.cam1_id:
+            self._start_preview()
+            
+    def start_recording(self):
+        """Start recording frames from both cameras."""
+        w0 = int(self.cam0.get(cv.CAP_PROP_FRAME_WIDTH))
+        h0 = int(self.cam0.get(cv.CAP_PROP_FRAME_HEIGHT))
+        w1 = int(self.cam1.get(cv.CAP_PROP_FRAME_WIDTH))
+        h1 = int(self.cam1.get(cv.CAP_PROP_FRAME_HEIGHT))
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self._writer0, self._writer1 = create_video_writers(timestamp, (w0, h0), (w1, h1))
+        self._recording = True
+        log.info(f"Recording started: {timestamp}")
+        
+    def stop_recording(self):
+        """Stop recording and release writers."""
+        self._recording = False
+        if self._writer0:
+            self._writer0.release()
+            self._writer0 = None
+        if self._writer1:
+            self._writer1.release()
+            self._writer1 = None
+        log.info("Recording stopped")
+        
     # Send to GUI
     
     # Utilities
@@ -116,35 +177,78 @@ class Controller:
         settings = load_yaml("calibration_settings.yaml")
         settings["camera0"] = cam0["id"]
         settings["camera1"] = cam1["id"]
+        settings["camera0_display"] = cam0["display"]
+        settings["camera1_display"] = cam1["display"]
         save_yaml(settings, "calibration_settings.yaml")
         
-        self._start_preview()    
+        self._start_preview()
+        
+    def _restore_camera_selection(self):
+        settings = load_yaml("calibration_settings.yaml")
+        cam0_id = settings.get("camera0")
+        cam1_id = settings.get("camera1")
+        cam0_display = settings.get("camera0_display")
+        cam1_display = settings.get("camera1_display")
+
+        if not all([cam0_id, cam1_id, cam0_display, cam1_display]):
+            log.debug("No saved camera selection found")
+            return
+
+        cam0 = {"id": cam0_id, "display": cam0_display}
+        cam1 = {"id": cam1_id, "display": cam1_display}
+        
+        self.cam0_id = cam0_id
+        self.cam1_id = cam1_id
+        self.gui.preselect_cameras(cam0, cam1)
+        self._start_preview()
     
     def _start_preview(self):
-        """Open cameras and begin polling frames."""
-        log.info(f"Opening cameras: cam0={self.cam0_id}, cam1={self.cam1_id}")
-        self.cam0 = open_camera(self.cam0_id)
-        self.cam1 = open_camera(self.cam1_id)
+        settings = load_yaml("calibration_settings.yaml")
+        w = settings.get("frame_width", 1280)
+        h = settings.get("frame_height", 720)
+        
+        if self.mode == "video":
+            cam0_id = self.video0_path
+            cam1_id = self.video1_path
+        else:
+            cam0_id = self.cam0_id
+            cam1_id = self.cam1_id
+
+        log.info(f"Opening: {cam0_id}, {cam1_id}")
+        self.cam0 = open_camera(cam0_id, width=w, height=h)
+        self.cam1 = open_camera(cam1_id, width=w, height=h)
+
+        if not self.cam0 or not self.cam1:
+            log.error("Could not open cameras/videos")
+            return
+
         self.preview_active = True
-        log.info("Preview Started")
-        
         self._frame_queue = queue.Queue(maxsize=2)
-        
         self._fps_count = 0
         self._fps_t0 = time.time()
-        self._model_fps_count = 0
-        self._model_fps_t0 = time.time()
-        
+        self._last_model_fps = 0
+
         self._model_thread = threading.Thread(target=self._model_loop, daemon=True)
         self._model_thread.start()
         self._poll_frames()
     
     def _model_loop(self):
         """Run model in separate thread"""
+        model_fps_count = 0
+        model_fps_t0 = time.time()
+        
         while self.preview_active:
             try:
                 frame0, frame1 = self._frame_queue.get(timeout=1)
                 result = self.model.process(frame0, frame1)
+                
+                model_fps_count += 1
+                elapsed = time.time() - model_fps_t0
+                if elapsed >= 2.0:
+                    self._last_model_fps = model_fps_count / elapsed
+                    model_fps_count = 0
+                    model_fps_t0 = time.time()
+                
                 self.gui.after(0, lambda r=result: self._update_gui(r))
             except queue.Empty:
                 continue
@@ -163,14 +267,51 @@ class Controller:
             self.cam1.release()
             self.cam1 = None
         log.info("Preview stopped")
+        
+    def on_preview_visibility(self, visible: bool):
+        """Stop or resume sending frames to camera previews."""
+        self._show_preview = visible
+        
+    def on_toggle_recording(self):
+        if self._recording:
+            self.stop_recording()
+        else:
+            self.start_recording()
+        self.gui.update_recording_state(self._recording)
     
     def _poll_frames(self):
-        """Read one frame from each camera and send to GUI. Reschedules itself."""
+        """
+        Read one frame from each camera, send to GUI preview and
+        put into frame_queue for model processing. Reschedules itself.
+        """
         if not self.preview_active:
             return
 
+        t0 = time.perf_counter()
         ret0, frame0 = self.cam0.read()
+        t1 = time.perf_counter()
         ret1, frame1 = self.cam1.read()
+        t2 = time.perf_counter()
+        
+        self.perf.record(
+            cam0_read_ms = (t1 - t0) * 1000,
+            cam1_read_ms = (t2 - t1) * 1000,
+        )
+        
+        if self._recording and self._writer0 and self._writer1:
+            self._writer0.write(frame0)
+            self._writer1.write(frame1)
+                
+        if not ret0 or not ret1:
+            if self.mode == "video":
+                log.info("Video ended, looping")
+                self.cam0.set(cv.CAP_PROP_POS_FRAMES, 0)
+                self.cam1.set(cv.CAP_PROP_POS_FRAMES, 0)
+            else:
+                if not ret0: log.warning("Failed to read frame from cam0")
+                if not ret1: log.warning("Failed to read frame from cam1")
+            self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
+            return
 
         # Poll FPS
         self._fps_count += 1
@@ -182,25 +323,21 @@ class Controller:
             self._fps_count = 0
             self._fps_t0 = time.time()
 
-        if ret0 and ret1:
-            try:
-                self._frame_queue.put_nowait((frame0, frame1))
-            except queue.Full:
-                pass
+        try:
+            self._frame_queue.put_nowait((frame0, frame1))
+        except queue.Full:
+            pass
+        if self._show_preview:
             self.gui.update_cam0(frame0)
             self.gui.update_cam1(frame1)
-        else:
-            if not ret0:
-                log.warning("Failed to read frame from cam0")
-            if not ret1:
-                log.warning("Failed to read frame from cam1")
 
         self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
     
     def _start_gui(self):
-      """Create and launch the main window."""
-      from gui.gui_new import MainWindow
-      self.gui = MainWindow(controller=self)
-      if self.model.triangulator is not None:
-        self.gui.show_calibration_status("Cameras calibrated")
-      self.gui.run()
+        """Create and launch the main window."""
+        from gui.gui_new import MainWindow
+        self.gui = MainWindow(controller=self)
+        if self.model.triangulator is not None:
+            self.gui.show_calibration_status("Cameras calibrated")
+        self._restore_camera_selection()
+        self.gui.run()

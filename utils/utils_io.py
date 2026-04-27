@@ -9,8 +9,11 @@ Light-weight helpers for reading / writing JSON and camera-parameter files.
 import yaml
 import json
 import logging
+import csv
+import os
 
 import numpy as np
+import cv2 as cv
 
 from pathlib import Path
 from typing import Tuple, Dict, List
@@ -91,3 +94,25 @@ def save_yaml(data: Dict, path: str) -> Dict:
     with open(path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     log.info(f"Saved to '{path}'")
+    
+def save_csv(data: list[dict], path: str) -> None:
+    """Save a list of dicts to a CSV file."""
+    if not data:
+        return
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=data[0].keys())
+        writer.writeheader()
+        writer.writerows(data)
+    log.info(f"CSV saved to {path}")
+
+def append_csv_row(writer: csv.writer, row: list) -> None:
+    """Append a single row to an already-open CSV writer."""
+    writer.writerow(row)
+    
+def create_video_writers(timestamp: str, size0: tuple, size1: tuple):
+    """Create VideoWriter objects for both cameras."""
+    os.makedirs("recordings", exist_ok=True)
+    fourcc = cv.VideoWriter_fourcc(*"XVID")
+    writer0 = cv.VideoWriter(f"recordings/cam0_{timestamp}.avi", fourcc, 30, size0)
+    writer1 = cv.VideoWriter(f"recordings/cam1_{timestamp}.avi", fourcc, 30, size1)
+    return writer0, writer1

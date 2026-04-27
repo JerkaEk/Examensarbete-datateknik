@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+import time
 import numpy as np
 
 from pose_estimation.pose2d_extractor import Pose2DEstimator
 from pose_estimation.triangulate3d import Triangulator
+from core.performance_logger import PerformanceLogger
 from utils.utils_io import load_extrinsics, load_intrinsics
 from collections import deque
 
@@ -13,7 +15,7 @@ log = logging.getLogger(__name__)
 SMOOTH_WINDOW=5 # Amount of frames to use for mean value smoothening
 
 class Model:
-  def __init__(self):
+  def __init__(self, log_performance: bool = False):
     
     # 2D pose estimators
     self.estimator0 = Pose2DEstimator(model_complexity=0)
@@ -32,6 +34,8 @@ class Model:
         
     self._landmark_buffer = deque(maxlen=SMOOTH_WINDOW)
     
+    self.perf = PerformanceLogger(log_to_csv=log_performance)
+    
   # Pose Estimation Pipeline
   def process(self, frame0: np.ndarray, frame1: np.ndarray) -> dict:
     """
@@ -49,12 +53,25 @@ class Model:
       landmarks_2d_right: (33, 2) float32 pixel coords cam1.
     """
     # 2D pose estimation
+    t0 = time.perf_counter()
     landmarks_2d_left  = self.estimator0.detect(frame0) 
+    t1 = time.perf_counter()
     landmarks_2d_right = self.estimator1.detect(frame1)
     
     # Triangulate to 3D
+    t2 = time.perf_counter()
     landmarks_3d = self.triangulate(landmarks_2d_left, landmarks_2d_right)
+    t3 = time.perf_counter()
     landmarks_3d = self._smooth(landmarks_3d)
+    t4 = time.perf_counter()
+    
+    self.perf.record(
+      estimator0_ms  = (t1 - t0) * 1000,
+      estimator1_ms  = (t2 - t1) * 1000,
+      triangulate_ms = (t3 - t2) * 1000,
+      smooth_ms      = (t4 - t3) * 1000,
+      total_ms       = (t4 - t0) * 1000,
+      )
     
     return {
       "frame_left": frame0,
