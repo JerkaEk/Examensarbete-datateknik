@@ -328,8 +328,24 @@ class Controller:
         except queue.Full:
             pass
         if self._show_preview:
+            h0 = self.gui.cam0_frame.winfo_height()
+            w0 = self.gui.cam0_frame.winfo_width()
+            h1 = self.gui.cam1_frame.winfo_height()
+            w1 = self.gui.cam1_frame.winfo_width()
+
+            if h0 > 2 and w0 > 2:
+                preview0 = cv.resize(frame0, (w0, h0))
+                self.gui.update_cam0(preview0)
+            if h1 > 2 and w0 > 2:
+                preview1 = cv.resize(frame1, (w1,h1))
+                self.gui.update_cam1(preview1)
+
+
+
             self.gui.update_cam0(frame0)
             self.gui.update_cam1(frame1)
+           # t_gui1 = time.perf_counter()
+           # log.debug(f"GUI UPDATE: {(t_gui1 - t_gui0)*1000:.1f} ms")
 
         self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
     
