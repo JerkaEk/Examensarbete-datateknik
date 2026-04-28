@@ -13,7 +13,64 @@ from datetime import datetime
 
 log = logging.getLogger(__name__)
 
-PREVIEW_INTERVAL_MS = int(1000/30)
+PREVIEW_INTERVAL_MS = 1
+PREVIEW_SCALE = 2  # Downsample factor for preview frames (pre-processed in reader thread)
+CALIBRATION_SETTINGS_PATH = "calibration/calibration_settings.yaml"
+
+
+class _CameraReader:
+    """Reads frames in a background thread, always exposing the latest frame.
+
+    Maintains two buffers:
+      - _frame:   full-resolution BGR for the model
+      - _preview: half-resolution RGB numpy for the GUI preview
+    Heavy work (resize + cvtColor) happens here, not in the GUI thread.
+    """
+    def __init__(self, cap):
+        self._cap = cap
+        self._frame = None
+        self._preview = None
+        self._ret = False
+        self._lock = threading.Lock()
+        self._cap_lock = threading.Lock()
+        self._stop = threading.Event()
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def _loop(self):
+        while not self._stop.is_set():
+            with self._cap_lock:
+                ret, frame = self._cap.read()
+            if ret:
+                h, w = frame.shape[:2]
+                small = cv.resize(frame, (w // PREVIEW_SCALE, h // PREVIEW_SCALE))
+                preview = cv.cvtColor(small, cv.COLOR_BGR2RGB)
+                with self._lock:
+                    self._ret, self._frame, self._preview = ret, frame, preview
+
+    def read(self):
+        with self._lock:
+            return self._ret, self._frame
+
+    def read_preview(self):
+        with self._lock:
+            return self._preview
+
+    def get(self, prop):
+        with self._cap_lock:
+            return self._cap.get(prop)
+
+    def set(self, prop, value):
+        with self._cap_lock:
+            return self._cap.set(prop, value)
+
+    def release(self):
+        self._stop.set()
+        with self._cap_lock:
+            self._cap.release()
+
+    def isOpened(self):
+        with self._cap_lock:
+            return self._cap.isOpened()
 
 class Controller:
     """Main controller for the Stereo 3D Skeleton Tracker."""
@@ -21,9 +78,10 @@ class Controller:
         self.no_gui = no_gui
         self.mock_cameras = mock_cameras
         
-        # State 
+        # State
         self.mode = "camera"    # camera/video
         self.preview_active = False
+        self._estimation_active = False
         self._show_preview = True
         self.gui = None
         self.calibration_running = False
@@ -44,7 +102,7 @@ class Controller:
         self._recording = False
 
         # Model
-        self.model = Model()
+        self.model = Model(log_performance=True)
         
         self.perf = PerformanceLogger()
         
@@ -82,7 +140,7 @@ class Controller:
         self.calibration_running = True
 
         from calibration.calibration import run_calibration
-        success = run_calibration("calibration/calibration_settings.yaml")
+        success = run_calibration(CALIBRATION_SETTINGS_PATH)
 
         if success:
             log.info("Calibration complete")
@@ -97,14 +155,24 @@ class Controller:
     def on_calibration_settings_opened(self):
         """Called by GUI when calibration settings panel opens — loads yaml into GUI."""
         log.debug("Calibration settings opened")
-        values = load_yaml("calibration_settings.yaml")
+        values = load_yaml(CALIBRATION_SETTINGS_PATH)
         self.gui.populate_settings(values)
         
     def on_calibration_settings_saved(self, values: dict):
         """Called by GUI when user saves calibration settings."""
         log.info("Saving calibration settings")
-        from calibration.auto_settings import generate_yaml
-        # TODO: generate_yaml needs cam0/cam1
+        settings = load_yaml(CALIBRATION_SETTINGS_PATH)
+        for key, value in values.items():
+            try:
+                settings[key] = int(value)
+            except (ValueError, TypeError):
+                try:
+                    settings[key] = float(value)
+                except (ValueError, TypeError):
+                    settings[key] = value
+        
+       # settings.update(values)
+        save_yaml(settings, CALIBRATION_SETTINGS_PATH)
         
     def on_toggle_preview(self):
         """Toggle live preview on/off."""
@@ -174,17 +242,17 @@ class Controller:
         self.cam0_id = cam0['id']
         self.cam1_id = cam1['id']
         
-        settings = load_yaml("calibration_settings.yaml")
+        settings = load_yaml(CALIBRATION_SETTINGS_PATH)
         settings["camera0"] = cam0["id"]
         settings["camera1"] = cam1["id"]
         settings["camera0_display"] = cam0["display"]
         settings["camera1_display"] = cam1["display"]
-        save_yaml(settings, "calibration_settings.yaml")
+        save_yaml(settings, CALIBRATION_SETTINGS_PATH)
         
         self._start_preview()
         
     def _restore_camera_selection(self):
-        settings = load_yaml("calibration_settings.yaml")
+        settings = load_yaml(CALIBRATION_SETTINGS_PATH)
         cam0_id = settings.get("camera0")
         cam1_id = settings.get("camera1")
         cam0_display = settings.get("camera0_display")
@@ -203,9 +271,9 @@ class Controller:
         self._start_preview()
     
     def _start_preview(self):
-        settings = load_yaml("calibration_settings.yaml")
-        w = settings.get("frame_width", 1280)
-        h = settings.get("frame_height", 720)
+        settings = load_yaml(CALIBRATION_SETTINGS_PATH)
+        w = settings.get("frame_width", 640)
+        h = settings.get("frame_height", 360)
         
         if self.mode == "video":
             cam0_id = self.video0_path
@@ -215,13 +283,15 @@ class Controller:
             cam1_id = self.cam1_id
 
         log.info(f"Opening: {cam0_id}, {cam1_id}")
-        self.cam0 = open_camera(cam0_id, width=w, height=h)
-        self.cam1 = open_camera(cam1_id, width=w, height=h)
+        cap0 = open_camera(cam0_id, width=w, height=h)
+        cap1 = open_camera(cam1_id, width=w, height=h)
 
-        if not self.cam0 or not self.cam1:
+        if not cap0 or not cap1:
             log.error("Could not open cameras/videos")
             return
 
+        self.cam0 = _CameraReader(cap0)
+        self.cam1 = _CameraReader(cap1)
         self.preview_active = True
         self._frame_queue = queue.Queue(maxsize=2)
         self._fps_count = 0
@@ -236,22 +306,26 @@ class Controller:
         """Run model in separate thread"""
         model_fps_count = 0
         model_fps_t0 = time.time()
-        
+
         while self.preview_active:
             try:
                 frame0, frame1 = self._frame_queue.get(timeout=1)
-                result = self.model.process(frame0, frame1)
-                
-                model_fps_count += 1
-                elapsed = time.time() - model_fps_t0
-                if elapsed >= 2.0:
-                    self._last_model_fps = model_fps_count / elapsed
-                    model_fps_count = 0
-                    model_fps_t0 = time.time()
-                
-                self.gui.after(0, lambda r=result: self._update_gui(r))
             except queue.Empty:
                 continue
+
+            if not self._estimation_active:
+                continue
+
+            result = self.model.process(frame0, frame1)
+
+            model_fps_count += 1
+            elapsed = time.time() - model_fps_t0
+            if elapsed >= 2.0:
+                self._last_model_fps = model_fps_count / elapsed
+                model_fps_count = 0
+                model_fps_t0 = time.time()
+
+            self.gui.after(0, lambda r=result: self._update_gui(r))
                 
     def _update_gui(self, result):
         """Update GUI with model results. Called from GUI thread."""
@@ -272,6 +346,10 @@ class Controller:
         """Stop or resume sending frames to camera previews."""
         self._show_preview = visible
         
+    def on_toggle_estimation(self):
+        self._estimation_active = not self._estimation_active
+        self.gui.update_estimation_state(self._estimation_active)
+
     def on_toggle_recording(self):
         if self._recording:
             self.stop_recording()
@@ -328,24 +406,12 @@ class Controller:
         except queue.Full:
             pass
         if self._show_preview:
-            h0 = self.gui.cam0_frame.winfo_height()
-            w0 = self.gui.cam0_frame.winfo_width()
-            h1 = self.gui.cam1_frame.winfo_height()
-            w1 = self.gui.cam1_frame.winfo_width()
-
-            if h0 > 2 and w0 > 2:
-                preview0 = cv.resize(frame0, (w0, h0))
-                self.gui.update_cam0(preview0)
-            if h1 > 2 and w0 > 2:
-                preview1 = cv.resize(frame1, (w1,h1))
-                self.gui.update_cam1(preview1)
-
-
-
-            self.gui.update_cam0(frame0)
-            self.gui.update_cam1(frame1)
-           # t_gui1 = time.perf_counter()
-           # log.debug(f"GUI UPDATE: {(t_gui1 - t_gui0)*1000:.1f} ms")
+            prev0 = self.cam0.read_preview()
+            prev1 = self.cam1.read_preview()
+            if prev0 is not None:
+                self.gui.update_cam0(prev0)
+            if prev1 is not None:
+                self.gui.update_cam1(prev1)
 
         self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
     

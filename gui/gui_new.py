@@ -88,11 +88,20 @@ class MainWindow(ctk.CTk):
     self.calibration_status_label.pack(side="right", padx=10)
     
     self.btn_video_mode = ctk.CTkButton(
-    self.topbar,
-    text="Video mode",
-    command=self._on_video_mode,
+        self.topbar,
+        text="Video mode",
+        command=self._on_video_mode,
     )
     self.btn_video_mode.pack(side="left", padx=10, pady=8)
+
+    self.btn_toggle_estimation = ctk.CTkButton(
+        self.topbar,
+        text="▶ Start estimation",
+        fg_color="green",
+        hover_color="#006600",
+        command=self._on_toggle_estimation,
+    )
+    self.btn_toggle_estimation.pack(side="left", padx=10, pady=8)
     
   def _build_content(self):
     # Outer container under top bar
@@ -261,7 +270,11 @@ class MainWindow(ctk.CTk):
       command=dialog.destroy,
     ).pack(side="left", expand=True, fill="x")
 
-    dialog.grab_set()
+    def _close_if_unfocused():
+      if dialog.winfo_exists() and dialog.focus_get() is None:
+        dialog.destroy()
+
+    dialog.bind("<FocusOut>", lambda _: dialog.after(50, _close_if_unfocused))
     
     
   # -------------------------------------------------- #
@@ -616,9 +629,11 @@ class MainWindow(ctk.CTk):
   def _on_calibration_settings(self):
     log.debug("Calibration settings panel toggled")
     self._calibration_settings_panel_open = not self._calibration_settings_panel_open
-    if self._calibration_settings_panel_open and not self._calibration_settings_built:
-      self._build_calibration_settings_panel()
-      self._calibration_settings_built = True
+    if self._calibration_settings_panel_open:
+      if not self._calibration_settings_built:
+        self._build_calibration_settings_panel()
+        self._calibration_settings_built = True
+      self.controller.on_calibration_settings_opened()
     self._set_panel(self.calibration_settings_panel, self._calibration_settings_panel_open)
     
   def _on_toggle_preview(self):
@@ -657,6 +672,7 @@ class MainWindow(ctk.CTk):
   def _on_calibration_settings_save(self):
     values = {key: entry.get() for key, entry in self._settings_fields.items()}  
     log.info(f"Saving calibrations settings: {values}")
+    self.controller.on_calibration_settings_saved(values)
     self._calibration_settings_panel_open = False
     self._set_panel(self.calibration_settings_panel, False)
 
@@ -697,8 +713,17 @@ class MainWindow(ctk.CTk):
     self._update_rec_buttons()
     self.controller.on_switch_to_camera_mode()
     
+  def _on_toggle_estimation(self):
+    self.controller.on_toggle_estimation()
+
   def _on_toggle_recording(self):
     self.controller.on_toggle_recording()
+
+  def update_estimation_state(self, active: bool):
+    text = "⏸ Pause estimation" if active else "▶ Start estimation"
+    fg = "#cc6600" if active else "green"
+    hover = "#994d00" if active else "#006600"
+    self.btn_toggle_estimation.configure(text=text, fg_color=fg, hover_color=hover)
 
   def update_recording_state(self, recording: bool):
       """Update rec button appearance based on recording state."""
@@ -710,25 +735,25 @@ class MainWindow(ctk.CTk):
   # -------------------------------------------------- # 
   # Public API
   # -------------------------------------------------- #
-  def update_cam0(self, frame):
-    """Update camera 0 preview with a new BGR frame."""
+  def update_cam0(self, frame_rgb: np.ndarray):
+    """Update camera 0 preview. Expects half-res RGB numpy from _CameraReader."""
     h = self.cam0_frame.winfo_height()
     w = self.cam0_frame.winfo_width()
     if h < 2 or w < 2:
       return
-    resized = cv.resize(frame, (w, h))
-    img = ImageTk.PhotoImage(Image.fromarray(cv.cvtColor(resized, cv.COLOR_BGR2RGB)))
+    resized = cv.resize(frame_rgb, (w, h))
+    img = ImageTk.PhotoImage(Image.fromarray(resized))
     self.cam0_label.configure(image=img, text="")
     self.cam0_label.image = img
 
-  def update_cam1(self, frame):
-    """Update camera 1 preview with a new BGR frame."""
+  def update_cam1(self, frame_rgb: np.ndarray):
+    """Update camera 1 preview. Expects half-res RGB numpy from _CameraReader."""
     h = self.cam1_frame.winfo_height()
     w = self.cam1_frame.winfo_width()
     if h < 2 or w < 2:
       return
-    resized = cv.resize(frame, (w, h))
-    img = ImageTk.PhotoImage(Image.fromarray(cv.cvtColor(resized, cv.COLOR_BGR2RGB)))
+    resized = cv.resize(frame_rgb, (w, h))
+    img = ImageTk.PhotoImage(Image.fromarray(resized))
     self.cam1_label.configure(image=img, text="")
     self.cam1_label.image = img
     
@@ -847,7 +872,13 @@ class MainWindow(ctk.CTk):
     self.ax.set_zlabel("Z")
     
   def run(self):
+    self.protocol("WM_DELETE_WINDOW", self._on_close)
     self.mainloop()
+
+  def _on_close(self):
+    if self.controller:
+      self.controller.shutdown()
+    self.destroy()
     
 if __name__ == "__main__":
   window = MainWindow(controller=None)
