@@ -130,14 +130,6 @@ class MainWindow(ctk.CTk):
   def _build_plot_area(self):
     self.plot_frame = ctk.CTkFrame(self.main)
     self.plot_frame.grid(row=0, column=0, sticky="nsew")
-    
-    self.plot_fps_label = ctk.CTkLabel(
-        self.plot_frame,
-        text="-- fps",
-        text_color="gray50",
-        font=ctk.CTkFont(size=11),
-    )
-    self.plot_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
 
     # Matplotlib figure
     self.fig = plt.Figure(facecolor="#2b2b2b")
@@ -147,7 +139,15 @@ class MainWindow(ctk.CTk):
     self.canvas = FigureCanvasTkAgg(self.fig, master=self.plot_frame)
     self.canvas.draw()
     self.canvas.get_tk_widget().pack(fill="both", expand=True)
-    
+
+    self.plot_fps_label = ctk.CTkLabel(
+        self.plot_frame,
+        text="-- fps",
+        text_color="gray50",
+        font=ctk.CTkFont(size=11),
+    )
+    self.plot_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
+
     # Reset plot orientation
     self.btn_reset_view = ctk.CTkButton(
         self.plot_frame,
