@@ -13,7 +13,7 @@ class PerformanceLogger:
     self,
     log_interval_s: float = 5.0,
     log_to_csv: bool = False,
-    csv_path: str = "performance_log.csv"
+    csv_path: str = "logs/performance_log.csv"
     ):
     self.log_interval_s = log_interval_s
     self.log_to_csv = log_to_csv
@@ -52,10 +52,13 @@ class PerformanceLogger:
       mean = np.mean(arr)
       std = np.std(arr)
       fps = 1000 / mean if mean > 0 else 0
-      log.info(f" {key:<20} mean={mean:6.1f} ms std={std:5.1f} fps={fps:5.1}")
+      log.info(f"  {key:<22} mean={mean:7.1f} ms   std={std:6.1f} ms   fps={fps:6.1f}")
     log.info(f"  samples: {len(next(iter(self._buffer.values())))}")
     self._buffer.clear()
     
   def close(self):
+    if self._buffer:
+      self._log_summary()
     if self.log_to_csv and self._rows:
       save_csv(self._rows, self.csv_path)
+      log.info(f"Performance log saved to {self.csv_path}")
