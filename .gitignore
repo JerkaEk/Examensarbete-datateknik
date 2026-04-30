@@ -9,3 +9,4 @@ camera_parameters/
 .python-version
 camera_settings.yaml
 logs/
+recordings/
