@@ -1,6 +1,9 @@
 from __future__ import annotations
 import numpy as np
 
+MEDIAPIPE_NUM_LANDMARKS = 33
+MOVENET_NUM_LANDMARKS   = 17
+
 LANDMARK_NAMES = [
   "left_shoulder", "right_shoulder",
   "left_elbow", "right_elbow",
