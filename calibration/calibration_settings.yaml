@@ -1,5 +1,5 @@
-camera0: 0
-camera1: /dev/video0
+camera0: /dev/video0
+camera1: /dev/video2
 frame_width: 640
 frame_height: 480
 checkerboard_rows: 9
@@ -9,3 +9,5 @@ mono_calibration_frames: 15
 stereo_calibration_frames: 15
 view_resize: 2
 cooldown: 20
+camera0_display: 'USB camera /dev/video0 (openaicam: openaicam (usb-xhci-hcd.0-1))'
+camera1_display: 'USB camera /dev/video2 (openaicam: openaicam (usb-xhci-hcd.1-1))'
