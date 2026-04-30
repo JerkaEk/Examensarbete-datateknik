@@ -77,7 +77,7 @@ class Controller:
     def __init__(self, no_gui=False, mock_cameras=False):   
         self.no_gui = no_gui
         self.mock_cameras = mock_cameras
-        
+
         # State
         self.mode = "camera"    # camera/video
         self.preview_active = False
@@ -301,23 +301,18 @@ class Controller:
         self._model_thread = threading.Thread(target=self._model_loop, daemon=True)
         self._model_thread.start()
         self._poll_frames()
-    
+
     def _model_loop(self):
-        """Run model in separate thread"""
         model_fps_count = 0
         model_fps_t0 = time.time()
 
         while self.preview_active:
-            try:
-                frame0, frame1 = self._frame_queue.get(timeout=1)
-            except queue.Empty:
-                continue
+            frame0, frame1 = self._frame_queue.get()
 
             if not self._estimation_active:
                 continue
 
             result = self.model.process(frame0, frame1)
-
             model_fps_count += 1
             elapsed = time.time() - model_fps_t0
             if elapsed >= 2.0:
@@ -325,8 +320,9 @@ class Controller:
                 model_fps_count = 0
                 model_fps_t0 = time.time()
 
-            self.gui.after(0, lambda r=result: self._update_gui(r))
-                
+            if result is not None:
+                self.gui.after(0, lambda r=result: self._update_gui(r))
+
     def _update_gui(self, result):
         """Update GUI with model results. Called from GUI thread."""
         self.gui.update_3d_plot(result["landmarks_3d"])
