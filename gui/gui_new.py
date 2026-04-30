@@ -11,6 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
 from core.settings_config import CALIBRATION_SETTINGS
+from pose_estimation.body_model import CONNECTIONS
 
 log = logging.getLogger(__name__)
 
@@ -803,16 +804,6 @@ class MainWindow(ctk.CTk):
     """Update the 3D plot with new landmark coordinates."""
     if np.isnan(landmarks_3d).all():
       return
-
-    CONNECTIONS = [
-        (0, 11), (0, 12),
-        (11, 13), (13, 15),
-        (12, 14), (14, 16),
-        (11, 23), (12, 24),
-        (23, 25), (25, 27),
-        (24, 26), (26, 28),
-        (23, 24), (11, 12),
-    ]
 
     self.ax.clear()
     self._style_3d_axes()

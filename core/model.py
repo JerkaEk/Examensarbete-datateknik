@@ -12,14 +12,19 @@ from collections import deque
 
 log = logging.getLogger(__name__)
 
+# from pose_estimation.pose2d_extractor import Pose2DEstimator as _Estimator
+# _ESTIMATOR_KWARGS: dict = {"model_complexity": 0}
+from pose_estimation.movenet_estimator import MoveNetEstimator as _Estimator
+_ESTIMATOR_KWARGS: dict = {"variant": "lightning"}
+
 SMOOTH_WINDOW=5 # Amount of frames to use for mean value smoothening
 
 class Model:
   def __init__(self, log_performance: bool = False):
     
     # 2D pose estimators
-    self.estimator0 = Pose2DEstimator(model_complexity=0)
-    self.estimator1 = Pose2DEstimator(model_complexity=0)
+    self.estimator0 = _Estimator(**_ESTIMATOR_KWARGS)
+    self.estimator1 = _Estimator(**_ESTIMATOR_KWARGS)
     
     # Triangulator
     self.triangulator = None
