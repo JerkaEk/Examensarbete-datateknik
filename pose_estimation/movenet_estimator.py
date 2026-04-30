@@ -13,7 +13,7 @@ import cv2 as cv
 
 from pose_estimation.body_model import (
     NUM_LANDMARKS,
-    MOVENET_NUM_LANDMARKS,
+    #MOVENET_NUM_LANDMARKS,
     movenet_to_body,
 )
 
