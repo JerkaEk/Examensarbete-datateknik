@@ -4,7 +4,6 @@ import logging
 import time
 import numpy as np
 
-from pose_estimation.pose2d_extractor import Pose2DEstimator
 from pose_estimation.triangulate3d import Triangulator
 from core.performance_logger import PerformanceLogger
 from utils.utils_io import load_extrinsics, load_intrinsics
