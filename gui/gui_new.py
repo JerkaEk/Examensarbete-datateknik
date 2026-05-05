@@ -44,6 +44,7 @@ class MainWindow(ctk.CTk):
     
     self._available_cameras = []
     self._preview_visible = True
+    self._view_initialized = False
     
     self._video_settings_panel_open = False
     self._video_settings_built = False
@@ -197,19 +198,6 @@ class MainWindow(ctk.CTk):
     )
     self.cam0_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
     
-    self.rec_btn_cam0 = ctk.CTkButton(
-    self.cam0_frame,
-    text="⏺ REC",
-    width=70,
-    fg_color="red",
-    hover_color="#cc0000",
-    command=self._on_toggle_recording,
-)
-# Dölj initialt
-# self.rec_btn_cam0.place(...)  — placeras inte än
-    
-    
-
     # Cam 1
     self.cam1_frame = ctk.CTkFrame(self.camera_column)
     self.cam1_frame.pack(side="top", fill="both", expand=True, pady=(4, 0))
@@ -230,15 +218,6 @@ class MainWindow(ctk.CTk):
     self.cam1_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
     
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
-    
-    self.rec_btn_cam1 = ctk.CTkButton(
-    self.cam1_frame,
-    text="⏺ REC",
-    width=70,
-    fg_color="red",
-    hover_color="#cc0000",
-    command=self._on_toggle_recording,
-    )
     
   def _show_calibration_warning(self):
     """Show warning popup if calibration files already exist."""
@@ -489,13 +468,14 @@ class MainWindow(ctk.CTk):
         command=self._on_video_play,
     ).pack(side="left", expand=True, fill="x", padx=(0, 4))
 
-    ctk.CTkButton(
+    self.btn_rec = ctk.CTkButton(
         btn_row,
-        text="Camera mode",
-        fg_color="gray30",
-        hover_color="gray40",
-        command=self._on_switch_to_camera_mode,
-    ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+        text="⏺ REC",
+        fg_color="red",
+        hover_color="#cc0000",
+        command=self._on_toggle_recording,
+    )
+    self.btn_rec.pack(side="left", expand=True, fill="x", padx=(4, 0))
       
   # -------------------------------------------------- #
   # Utility for Settings Panels
@@ -647,14 +627,6 @@ class MainWindow(ctk.CTk):
       self.btn_toggle_preview.configure(text="Show preview")
     self.controller.on_preview_visibility(self._preview_visible)
     
-  def _update_rec_buttons(self):
-    if self._video_settings_panel_open:
-        self.rec_btn_cam0.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
-        self.rec_btn_cam1.place(relx=0.0, rely=1.0, anchor="sw", x=8, y=-8)
-    else:
-        self.rec_btn_cam0.place_forget()
-        self.rec_btn_cam1.place_forget()
-    
   # -------------------------------------------------- #
   # Event Handlers
   # -------------------------------------------------- #
@@ -727,11 +699,10 @@ class MainWindow(ctk.CTk):
     self.btn_toggle_estimation.configure(text=text, fg_color=fg, hover_color=hover)
 
   def update_recording_state(self, recording: bool):
-      """Update rec button appearance based on recording state."""
-      text = "⏹ STOP" if recording else "⏺ REC"
-      fg = "#cc0000" if recording else "red"
-      self.rec_btn_cam0.configure(text=text, fg_color=fg)
-      self.rec_btn_cam1.configure(text=text, fg_color=fg)
+    text = "⏹ STOP" if recording else "⏺ REC"
+    fg = "#cc0000" if recording else "red"
+    if self._video_settings_built:
+      self.btn_rec.configure(text=text, fg_color=fg)
   
   # -------------------------------------------------- # 
   # Public API
@@ -757,7 +728,7 @@ class MainWindow(ctk.CTk):
     img = ImageTk.PhotoImage(Image.fromarray(resized))
     self.cam1_label.configure(image=img, text="")
     self.cam1_label.image = img
-    
+
   def update_camera_list(self, cameras:list):
     """Populate camera dropdown with detected cameras."""
     if not cameras:
@@ -805,16 +776,31 @@ class MainWindow(ctk.CTk):
     if np.isnan(landmarks_3d).all():
       return
 
+    # Save view before clear() resets it, so manual rotation persists
+    azim = self.ax.azim
+    elev = self.ax.elev
+
     self.ax.clear()
     self._style_3d_axes()
 
-    valid = np.isfinite(landmarks_3d).all(axis=1)
     x, y, z = landmarks_3d[:, 0], landmarks_3d[:, 1], landmarks_3d[:, 2]
-    self.ax.scatter(x[valid], y[valid], z[valid], c="blue", s=20)
+    connected = set()
     for i, j in CONNECTIONS:
       if np.isfinite(landmarks_3d[i]).all() and np.isfinite(landmarks_3d[j]).all():
         self.ax.plot([x[i], x[j]], [y[i], y[j]], [z[i], z[j]], c="red", linewidth=1.5)
+        connected.add(i)
+        connected.add(j)
+    if connected:
+      idx = list(connected)
+      self.ax.scatter(x[idx], y[idx], z[idx], c="blue", s=20)
+      if not self._view_initialized:
+        # On first valid detection auto-orient: camera looks along +Z, X=right, Y=down.
+        # elev=-80 puts us near the -Z axis looking toward the scene (camera viewpoint).
+        # azim=0 keeps X pointing right.
+        azim, elev = 0, -80
+        self._view_initialized = True
 
+    self.ax.view_init(elev=elev, azim=azim)
     self.canvas.draw_idle()
     
   def update_fps(self, poll_fps: float, model_fps: float):

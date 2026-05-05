@@ -20,6 +20,7 @@ import numpy as np
 from typing import List, Dict
 from pathlib import Path
 from utils.utils_io import save_json
+from pose_estimation.body_model import NUM_LANDMARKS, MEDIAPIPE_NUM_LANDMARKS, mediapipe_to_body
 
 log = logging.getLogger(__name__)
 VISIBILITY_THRESHOLD = 0.5
@@ -40,7 +41,6 @@ def detect_landmarks(frame, pose) -> List[Dict] | None:
     if not res.pose_landmarks:
         return None
     return [{"x": lm.x, "y": lm.y, "z": lm.z, "visibility": lm.visibility} for lm in res.pose_landmarks.landmark]
-
 
 # ──────────────────────────────────────────────────────────────────────────── #
 # Main extraction loop
@@ -96,13 +96,13 @@ class Pose2DEstimator:
         landmarks = detect_landmarks(frame, self.pose)
         if landmarks is None:
             log.debug("No pose detected in frame")
-            return np.full((33, 2), np.nan, dtype=np.float32)
+            return np.full((NUM_LANDMARKS, 2), np.nan, dtype=np.float32)
         
         result = np.full((33, 2), np.nan, dtype=np.float32)
         for i, lm in enumerate(landmarks):
             if lm["visibility"] >= VISIBILITY_THRESHOLD:
                 result[i] = [lm["x"] * w, lm["y"] * h]
-        return result
+        return mediapipe_to_body(result)
         
     def close(self):
         self.pose.close()
