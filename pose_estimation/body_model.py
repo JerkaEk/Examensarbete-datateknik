@@ -56,6 +56,18 @@ MOVENET_MAPPING = np.array([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0], dtype
 def movenet_to_body(landmarks_17: np.ndarray) -> np.ndarray:
     return landmarks_17[MOVENET_MAPPING]
 
+# (name, index_A, index_B, index_C) — angle measured at B
+JOINT_ANGLES = [
+  ("Left elbow",      0,  2,  4),   # left_shoulder  → left_elbow    → left_wrist
+  ("Right elbow",     1,  3,  5),   # right_shoulder → right_elbow   → right_wrist
+  ("Left knee",       6,  8, 10),   # left_hip       → left_knee     → left_ankle
+  ("Right knee",      7,  9, 11),   # right_hip      → right_knee    → right_ankle
+  ("Left shoulder",   6,  0,  2),   # left_hip       → left_shoulder → left_elbow
+  ("Right shoulder",  7,  1,  3),   # right_hip      → right_shoulder → right_elbow
+  ("Left hip",        0,  6,  8),   # left_shoulder  → left_hip      → left_knee
+  ("Right hip",       1,  7,  9),   # right_shoulder → right_hip     → right_knee
+]
+
 def active_indices(groups: list[str]) -> np.ndarray:
     names = set()
     for group in groups:

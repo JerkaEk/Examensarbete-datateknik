@@ -48,6 +48,9 @@ class MainWindow(ctk.CTk):
     
     self._video_settings_panel_open = False
     self._video_settings_built = False
+
+    self._joints_panel_open = False
+    self._joints_panel_built = False
     
     self._build_topbar()
     self._build_content()
@@ -96,6 +99,12 @@ class MainWindow(ctk.CTk):
     )
     self.btn_video_mode.pack(side="left", padx=10, pady=8)
 
+    ctk.CTkButton(
+        self.topbar,
+        text="Joints",
+        command=self._on_joints,
+    ).pack(side="left", padx=10, pady=8)
+
     self.btn_toggle_estimation = ctk.CTkButton(
         self.topbar,
         text="▶ Start estimation",
@@ -134,13 +143,25 @@ class MainWindow(ctk.CTk):
     self.video_settings_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
     self.video_settings_panel.pack(side="left", fill="y")
     self.video_settings_panel.pack_propagate(False)
+
+    self.joints_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
+    self.joints_panel.pack(side="left", fill="y")
+    self.joints_panel.pack_propagate(False)
     
     self._build_plot_area()
     self._build_camera_preview()
     
   def _build_plot_area(self):
+    self.main.rowconfigure(1, weight=0)
+
     self.plot_frame = ctk.CTkFrame(self.main)
     self.plot_frame.grid(row=0, column=0, sticky="nsew")
+
+    # Angle bar — sits below the 3D plot, populated by _build_joints_panel
+    self.angle_bar = ctk.CTkFrame(self.main, height=40, fg_color="#1e1e1e", corner_radius=0)
+    self.angle_bar.grid(row=1, column=0, sticky="ew")
+    self.angle_bar.grid_propagate(False)
+    self._angle_labels: dict = {}
 
     # Matplotlib figure
     self.fig = plt.Figure(facecolor="#2b2b2b")
@@ -477,6 +498,44 @@ class MainWindow(ctk.CTk):
     )
     self.btn_rec.pack(side="left", expand=True, fill="x", padx=(4, 0))
       
+  def _build_joints_panel(self):
+    from pose_estimation.body_model import JOINT_ANGLES
+    ctk.CTkLabel(
+        self.joints_panel,
+        text="Joint Angles",
+        font=ctk.CTkFont(size=15, weight="bold"),
+    ).pack(pady=(16, 8), padx=16, anchor="w")
+    ctk.CTkFrame(self.joints_panel, height=1, fg_color="gray30").pack(
+        fill="x", padx=16, pady=(0, 12)
+    )
+    self._joint_vars: dict = {}
+    for name, *_ in JOINT_ANGLES:
+      var = ctk.BooleanVar(value=False)
+      ctk.CTkCheckBox(
+          self.joints_panel,
+          text=name,
+          variable=var,
+          command=lambda n=name, v=var: self._on_joint_toggle(n, v),
+      ).pack(padx=16, pady=4, anchor="w")
+      self._joint_vars[name] = var
+      # Pre-create a label in the angle bar (hidden until checkbox ticked)
+      lbl = ctk.CTkLabel(
+          self.angle_bar,
+          text=f"{name}: --",
+          font=ctk.CTkFont(size=12),
+          text_color="gray70",
+      )
+      self._angle_labels[name] = lbl
+
+  def _on_joint_toggle(self, name: str, var: ctk.BooleanVar):
+    lbl = self._angle_labels.get(name)
+    if lbl is None:
+      return
+    if var.get():
+      lbl.pack(side="left", padx=16, pady=8)
+    else:
+      lbl.pack_forget()
+
   # -------------------------------------------------- #
   # Utility for Settings Panels
   # -------------------------------------------------- #
@@ -686,11 +745,25 @@ class MainWindow(ctk.CTk):
     self._update_rec_buttons()
     self.controller.on_switch_to_camera_mode()
     
+  def _on_joints(self):
+    self._joints_panel_open = not self._joints_panel_open
+    if self._joints_panel_open and not self._joints_panel_built:
+      self._build_joints_panel()
+      self._joints_panel_built = True
+    self._set_panel(self.joints_panel, self._joints_panel_open)
+
   def _on_toggle_estimation(self):
     self.controller.on_toggle_estimation()
 
   def _on_toggle_recording(self):
     self.controller.on_toggle_recording()
+
+  def update_joint_angles(self, angles: dict):
+    for name, lbl in self._angle_labels.items():
+      if name in angles:
+        lbl.configure(text=f"{name}: {angles[name]:.1f}°")
+      else:
+        lbl.configure(text=f"{name}: --")
 
   def update_estimation_state(self, active: bool):
     text = "⏸ Pause estimation" if active else "▶ Start estimation"
