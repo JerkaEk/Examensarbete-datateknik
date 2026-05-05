@@ -114,10 +114,9 @@ class Controller:
         self._writer1 = None
         self._recording = False
 
-        # Model
-        self.model = Model(log_performance=True)
-        
+        # Shared performance logger — model and controller write to the same CSV
         self.perf = PerformanceLogger(log_to_csv=True)
+        self.model = Model(log_performance=True, perf=self.perf)
         
         log.debug("Controller initialized")
     
@@ -135,8 +134,7 @@ class Controller:
         if self._recording:
             self.stop_recording()
             
-        self.perf.close()
-        self.model.perf.close()
+        self.perf.close()  # model.perf is the same object — close only once
         
         # Close all process threads here.     
 
