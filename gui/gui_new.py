@@ -11,7 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
 from core.settings_config import CALIBRATION_SETTINGS
-from pose_estimation.body_model import CONNECTIONS
+from pose_estimation.body_model import CONNECTIONS, JOINT_ANGLES
 
 log = logging.getLogger(__name__)
 
@@ -99,12 +99,6 @@ class MainWindow(ctk.CTk):
     )
     self.btn_video_mode.pack(side="left", padx=10, pady=8)
 
-    ctk.CTkButton(
-        self.topbar,
-        text="Joints",
-        command=self._on_joints,
-    ).pack(side="left", padx=10, pady=8)
-
     self.btn_toggle_estimation = ctk.CTkButton(
         self.topbar,
         text="▶ Start estimation",
@@ -113,7 +107,14 @@ class MainWindow(ctk.CTk):
         command=self._on_toggle_estimation,
     )
     self.btn_toggle_estimation.pack(side="left", padx=10, pady=8)
-    
+
+    self.btn_joints = ctk.CTkButton(
+        self.topbar,
+        text="Joints",
+        command=self._on_joints,
+    )
+    self.btn_joints.pack(side="left", padx=10, pady=8)
+
   def _build_content(self):
     # Outer container under top bar
     self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -137,8 +138,6 @@ class MainWindow(ctk.CTk):
     # Config Columns - 3D-plot
     self.main = ctk.CTkFrame(self.content, corner_radius=0, fg_color="transparent")
     self.main.pack(side="left", fill="both", expand=True, padx=(4, 8), pady=8)
-    self.main.rowconfigure(0, weight=1)
-    self.main.columnconfigure(0, weight=1)
     
     self.video_settings_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
     self.video_settings_panel.pack(side="left", fill="y")
@@ -147,21 +146,20 @@ class MainWindow(ctk.CTk):
     self.joints_panel = ctk.CTkFrame(self.content, width=0, corner_radius=0)
     self.joints_panel.pack(side="left", fill="y")
     self.joints_panel.pack_propagate(False)
-    
+
     self._build_plot_area()
     self._build_camera_preview()
     
   def _build_plot_area(self):
-    self.main.rowconfigure(1, weight=0)
+    # angle_bar lives in self.main, packed first so it reserves the bottom strip.
+    # It must be packed BEFORE plot_frame so pack(side="bottom") claims space first.
+    self.angle_bar = ctk.CTkFrame(self.main, height=32, fg_color="transparent")
+    self.angle_bar.pack(side="bottom", fill="x")
+    self.angle_bar.pack_propagate(False)
+    self._angle_labels: dict = {}
 
     self.plot_frame = ctk.CTkFrame(self.main)
-    self.plot_frame.grid(row=0, column=0, sticky="nsew")
-
-    # Angle bar — sits below the 3D plot, populated by _build_joints_panel
-    self.angle_bar = ctk.CTkFrame(self.main, height=40, fg_color="#1e1e1e", corner_radius=0)
-    self.angle_bar.grid(row=1, column=0, sticky="ew")
-    self.angle_bar.grid_propagate(False)
-    self._angle_labels: dict = {}
+    self.plot_frame.pack(fill="both", expand=True)
 
     # Matplotlib figure
     self.fig = plt.Figure(facecolor="#2b2b2b")
@@ -180,7 +178,6 @@ class MainWindow(ctk.CTk):
     )
     self.plot_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
 
-    # Reset plot orientation
     self.btn_reset_view = ctk.CTkButton(
         self.plot_frame,
         text="Reset view",
@@ -188,7 +185,7 @@ class MainWindow(ctk.CTk):
         command=self._on_reset_view,
     )
     self.btn_reset_view.place(relx=0.0, rely=1.0, anchor="sw", x=140, y=-8)
-    
+
     self.btn_toggle_preview = ctk.CTkButton(
         self.plot_frame,
         text="Hide preview",
@@ -499,42 +496,51 @@ class MainWindow(ctk.CTk):
     self.btn_rec.pack(side="left", expand=True, fill="x", padx=(4, 0))
       
   def _build_joints_panel(self):
-    from pose_estimation.body_model import JOINT_ANGLES
     ctk.CTkLabel(
         self.joints_panel,
         text="Joint Angles",
         font=ctk.CTkFont(size=15, weight="bold"),
     ).pack(pady=(16, 8), padx=16, anchor="w")
+
     ctk.CTkFrame(self.joints_panel, height=1, fg_color="gray30").pack(
         fill="x", padx=16, pady=(0, 12)
     )
+
     self._joint_vars: dict = {}
     for name, *_ in JOINT_ANGLES:
       var = ctk.BooleanVar(value=False)
+      self._joint_vars[name] = var
+
+      lbl = ctk.CTkLabel(
+          self.angle_bar,
+          text=f"{name}: --",
+          font=ctk.CTkFont(size=11),
+          text_color="gray70",
+      )
+      self._angle_labels[name] = lbl
+
       ctk.CTkCheckBox(
           self.joints_panel,
           text=name,
           variable=var,
           command=lambda n=name, v=var: self._on_joint_toggle(n, v),
-      ).pack(padx=16, pady=4, anchor="w")
-      self._joint_vars[name] = var
-      # Pre-create a label in the angle bar (hidden until checkbox ticked)
-      lbl = ctk.CTkLabel(
-          self.angle_bar,
-          text=f"{name}: --",
-          font=ctk.CTkFont(size=12),
-          text_color="gray70",
-      )
-      self._angle_labels[name] = lbl
+      ).pack(anchor="w", padx=16, pady=4)
 
   def _on_joint_toggle(self, name: str, var: ctk.BooleanVar):
     lbl = self._angle_labels.get(name)
     if lbl is None:
       return
     if var.get():
-      lbl.pack(side="left", padx=16, pady=8)
+      lbl.pack(side="left", padx=8)
     else:
       lbl.pack_forget()
+
+  def _on_joints(self):
+    self._joints_panel_open = not self._joints_panel_open
+    if self._joints_panel_open and not self._joints_panel_built:
+      self._build_joints_panel()
+      self._joints_panel_built = True
+    self._set_panel(self.joints_panel, self._joints_panel_open)
 
   # -------------------------------------------------- #
   # Utility for Settings Panels
@@ -745,25 +751,11 @@ class MainWindow(ctk.CTk):
     self._update_rec_buttons()
     self.controller.on_switch_to_camera_mode()
     
-  def _on_joints(self):
-    self._joints_panel_open = not self._joints_panel_open
-    if self._joints_panel_open and not self._joints_panel_built:
-      self._build_joints_panel()
-      self._joints_panel_built = True
-    self._set_panel(self.joints_panel, self._joints_panel_open)
-
   def _on_toggle_estimation(self):
     self.controller.on_toggle_estimation()
 
   def _on_toggle_recording(self):
     self.controller.on_toggle_recording()
-
-  def update_joint_angles(self, angles: dict):
-    for name, lbl in self._angle_labels.items():
-      if name in angles:
-        lbl.configure(text=f"{name}: {angles[name]:.1f}°")
-      else:
-        lbl.configure(text=f"{name}: --")
 
   def update_estimation_state(self, active: bool):
     text = "⏸ Pause estimation" if active else "▶ Start estimation"
@@ -876,6 +868,12 @@ class MainWindow(ctk.CTk):
     self.ax.view_init(elev=elev, azim=azim)
     self.canvas.draw_idle()
     
+  def update_joint_angles(self, angles: dict):
+    for name, lbl in self._angle_labels.items():
+      val = angles.get(name)
+      text = f"{name}: {val:.1f}°" if val is not None else f"{name}: --"
+      lbl.configure(text=text)
+
   def update_fps(self, poll_fps: float, model_fps: float):
     """Display live FPS on camera previews and 3D plot."""
     self.cam0_fps_label.configure(text=f"{poll_fps:.0f} fps")
