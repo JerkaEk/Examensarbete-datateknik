@@ -21,10 +21,14 @@ log = logging.getLogger(__name__)
 from utils.utils_io import load_json, save_json, load_intrinsics, load_extrinsics
 
 class Triangulator:
-    def __init__(self, k0: np.ndarray, k1: np.ndarray, 
-                 r1: np.ndarray, t1: np.ndarray): 
+    def __init__(self, k0: np.ndarray, k1: np.ndarray, dist0: np.ndarray, 
+                 dist1: np.ndarray, r1: np.ndarray, t1: np.ndarray): 
          # set camera0 in origo, with no rotation or translation
          r0, t0 = np.eye(3), np.zeros((3, 1))
+         self.k0 = k0
+         self.k1 = k1
+         self.dist0 = dist0
+         self.dist1 = dist1
          self.p0 = self.build_projection(k0, r0, t0)
          self.p1 = self.build_projection(k1, r1, t1)
 
@@ -33,9 +37,18 @@ class Triangulator:
         Rt = np.hstack((R, t))
         return K @ Rt
     
+    def undistort(self, pts, K, dist):
+        if dist is None:
+            return pts
+        pts = pts.reshape(-1, 1, 2)
+        undist = cv.undistortPoints(pts, K, dist, P=K)
+        return undist.reshape(-1, 2)
+    
     def triangulate(self, pts0: np.ndarray, pts1: np.ndarray) -> np.ndarray:
         """Triangulate each pair of points (Nx2, Nx2) into (x, y, z)."""
         pts_3d = []
+        pts0 = self.undistort(pts0, self.k0, self.dist0)
+        pts1 = self.undistort(pts1, self.k1, self.dist1)
         for p0, p1 in zip(pts0, pts1):
             if np.isnan(p0).any() or np.isnan(p1).any():
                 pts_3d.append([np.nan, np.nan, np.nan])

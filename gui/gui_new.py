@@ -849,6 +849,7 @@ class MainWindow(ctk.CTk):
     self._style_3d_axes()
 
     x, y, z = landmarks_3d[:, 0], landmarks_3d[:, 1], landmarks_3d[:, 2]
+
     connected = set()
     for i, j in CONNECTIONS:
       if np.isfinite(landmarks_3d[i]).all() and np.isfinite(landmarks_3d[j]).all():
@@ -858,12 +859,12 @@ class MainWindow(ctk.CTk):
     if connected:
       idx = list(connected)
       self.ax.scatter(x[idx], y[idx], z[idx], c="blue", s=20)
-      if not self._view_initialized:
-        # On first valid detection auto-orient: camera looks along +Z, X=right, Y=down.
-        # elev=-80 puts us near the -Z axis looking toward the scene (camera viewpoint).
-        # azim=0 keeps X pointing right.
-        azim, elev = 0, -80
-        self._view_initialized = True
+      # if not self._view_initialized:
+      #   # On first valid detection auto-orient: camera looks along +Z, X=right, Y=down.
+      #   # elev=-80 puts us near the -Z axis looking toward the scene (camera viewpoint).
+      #   # azim=0 keeps X pointing right.
+      #   azim, elev = 0, -80
+      #   self._view_initialized = True
 
     self.ax.view_init(elev=elev, azim=azim)
     self.canvas.draw_idle()

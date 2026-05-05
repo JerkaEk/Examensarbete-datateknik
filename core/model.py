@@ -36,7 +36,7 @@ class Model:
         k0, dist0 = load_intrinsics("camera/camera_parameters/camera0_intrinsics.dat")
         k1, dist1 = load_intrinsics("camera/camera_parameters/camera1_intrinsics.dat")
         r1, t1 = load_extrinsics("camera/camera_parameters/camera1_rot_trans.dat")
-        self.triangulator = Triangulator(k0, k1, r1, t1)
+        self.triangulator = Triangulator(k0, k1, dist0, dist1, r1, t1)
         log.info("Calibration loaded successfully")
     except FileNotFoundError:
         log.warning(f"Calibration files not found")
