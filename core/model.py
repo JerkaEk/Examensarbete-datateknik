@@ -24,12 +24,12 @@ def _to_gray(frame: np.ndarray) -> np.ndarray:
     return frame if frame.ndim == 2 else cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
 class Model:
-  def __init__(self, log_performance: bool = False):
-    
+  def __init__(self, log_performance: bool = False, perf: PerformanceLogger = None):
+
     # 2D pose estimators
     self.estimator0 = _Estimator(**_ESTIMATOR_KWARGS)
     self.estimator1 = _Estimator(**_ESTIMATOR_KWARGS)
-    
+
     # Triangulator
     self.triangulator = None
     try:
@@ -40,10 +40,10 @@ class Model:
         log.info("Calibration loaded successfully")
     except FileNotFoundError:
         log.warning(f"Calibration files not found")
-        
+
     self._landmark_buffer = deque(maxlen=SMOOTH_WINDOW)
-    
-    self.perf = PerformanceLogger(log_to_csv=log_performance)
+
+    self.perf = perf if perf is not None else PerformanceLogger(log_to_csv=log_performance)
 
     ## Inference och tracking
     # Frame counter

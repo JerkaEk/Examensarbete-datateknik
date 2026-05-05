@@ -34,6 +34,9 @@ class _CameraReader:
         self._lock = threading.Lock()
         self._cap_lock = threading.Lock()
         self._stop = threading.Event()
+        self._capture_fps = 0.0
+        self._cap_count = 0
+        self._cap_t0 = time.time()
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
@@ -46,6 +49,16 @@ class _CameraReader:
                 preview = cv.cvtColor(small, cv.COLOR_BGR2RGB)
                 with self._lock:
                     self._ret, self._frame, self._preview = ret, frame, preview
+                self._cap_count += 1
+                elapsed = time.time() - self._cap_t0
+                if elapsed >= 2.0:
+                    self._capture_fps = self._cap_count / elapsed
+                    self._cap_count = 0
+                    self._cap_t0 = time.time()
+
+    @property
+    def capture_fps(self) -> float:
+        return self._capture_fps
 
     def read(self):
         with self._lock:
@@ -101,10 +114,9 @@ class Controller:
         self._writer1 = None
         self._recording = False
 
-        # Model
-        self.model = Model(log_performance=True)
-        
-        self.perf = PerformanceLogger()
+        # Shared performance logger — model and controller write to the same CSV
+        self.perf = PerformanceLogger(log_to_csv=True)
+        self.model = Model(log_performance=True, perf=self.perf)
         
         log.debug("Controller initialized")
     
@@ -122,8 +134,7 @@ class Controller:
         if self._recording:
             self.stop_recording()
             
-        self.perf.close()
-        self.model.perf.close()
+        self.perf.close()  # model.perf is the same object — close only once
         
         # Close all process threads here.     
 
@@ -395,6 +406,11 @@ class Controller:
             poll_fps = self._fps_count / elapsed
             log.info(f"Poll FPS: {poll_fps:.1f}")
             self.gui.update_fps(poll_fps, self._last_model_fps)
+            self.perf.record(
+                poll_fps=poll_fps,
+                cam0_capture_fps=self.cam0.capture_fps,
+                cam1_capture_fps=self.cam1.capture_fps,
+            )
             self._fps_count = 0
             self._fps_t0 = time.time()
 

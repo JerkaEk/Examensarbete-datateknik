@@ -96,11 +96,12 @@ def save_yaml(data: Dict, path: str) -> Dict:
     log.info(f"Saved to '{path}'")
     
 def save_csv(data: list[dict], path: str) -> None:
-    """Save a list of dicts to a CSV file."""
+    """Save a list of dicts to a CSV file. Rows may have different keys; missing values are left empty."""
     if not data:
         return
+    fieldnames = list(dict.fromkeys(k for row in data for k in row))
     with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=data[0].keys())
+        writer = csv.DictWriter(f, fieldnames=fieldnames, restval="")
         writer.writeheader()
         writer.writerows(data)
     log.info(f"CSV saved to {path}")
