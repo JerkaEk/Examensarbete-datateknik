@@ -326,6 +326,7 @@ class Controller:
     def _update_gui(self, result):
         """Update GUI with model results. Called from GUI thread."""
         self.gui.update_3d_plot(result["landmarks_3d"])
+        self.gui.update_joint_angles(result.get("joint_angles", {}))
         
     def _stop_preview(self):
         """Stop frame polling and release cameras."""

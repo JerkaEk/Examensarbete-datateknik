@@ -6,7 +6,7 @@ import numpy as np
 import cv2 as cv
 
 from pose_estimation.triangulate3d import Triangulator
-from pose_estimation.body_model import NUM_LANDMARKS
+from pose_estimation.body_model import NUM_LANDMARKS, JOINT_ANGLES
 from core.performance_logger import PerformanceLogger
 from utils.utils_io import load_extrinsics, load_intrinsics
 from collections import deque
@@ -150,11 +150,12 @@ class Model:
     )
 
     return {
-        "frame_left": frame0,
-        "frame_right": frame1,
-        "landmarks_3d": landmarks_3d,
-        "landmarks_2d_left": landmarks_2d_left,
+        "frame_left":         frame0,
+        "frame_right":        frame1,
+        "landmarks_3d":       landmarks_3d,
+        "landmarks_2d_left":  landmarks_2d_left,
         "landmarks_2d_right": landmarks_2d_right,
+        "joint_angles":       self._compute_angles(landmarks_3d),
     }
     
   def triangulate(self, pts0: np.ndarray, pts1: np.ndarray) -> np.ndarray:
@@ -177,6 +178,17 @@ class Model:
     result = landmarks_3d.copy()
     result[valid & (dists > threshold_mm)] = np.nan
     return result
+
+  def _compute_angles(self, landmarks_3d: np.ndarray) -> dict:
+    angles = {}
+    for name, ai, bi, ci in JOINT_ANGLES:
+      a, b, c = landmarks_3d[ai], landmarks_3d[bi], landmarks_3d[ci]
+      if np.isfinite(a).all() and np.isfinite(b).all() and np.isfinite(c).all():
+        ba, bc = a - b, c - b
+        n = np.linalg.norm(ba) * np.linalg.norm(bc)
+        if n > 0:
+          angles[name] = float(np.degrees(np.arccos(np.clip(np.dot(ba, bc) / n, -1.0, 1.0))))
+    return angles
 
   def _smooth(self, landmarks_3d: np.ndarray) -> np.ndarray:
     """Apply temporal smoothing over the last N frames."""
