@@ -14,6 +14,9 @@ from __future__ import annotations
 from pathlib import Path
 import numpy as np
 import cv2 as cv
+import logging
+
+log = logging.getLogger(__name__)
 
 from utils.utils_io import load_json, save_json, load_intrinsics, load_extrinsics
 
@@ -34,10 +37,17 @@ class Triangulator:
         """Triangulate each pair of points (Nx2, Nx2) into (x, y, z)."""
         pts_3d = []
         for p0, p1 in zip(pts0, pts1):
+            if np.isnan(p0).any() or np.isnan(p1).any():
+                pts_3d.append([np.nan, np.nan, np.nan])
+                continue
             X4 = cv.triangulatePoints(self.p0, self.p1, p0.reshape(2, 1), p1.reshape(2, 1))
             X3 = (X4[:3] / X4[3]).ravel()
             pts_3d.append(X3)
-        return np.array(pts_3d, dtype=np.float32)
+        result = np.array(pts_3d, dtype=np.float32)
+        valid = np.isfinite(result).all(axis=1)
+        if valid.any():
+            log.debug(f"3D range: {result[valid].min():.1f} to {result[valid].max():.1f}")
+        return result
 
 def process(pose_json: Path, out_json: Path, tri: Triangulator) -> None:
     """Main driver: read 2-D JSON, load camera params, save 3-D JSON."""
