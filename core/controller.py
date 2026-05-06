@@ -35,6 +35,7 @@ class _CameraReader:
         self._cap_lock = threading.Lock()
         self._stop = threading.Event()
         self._capture_fps = 0.0
+        self._capture_time = 0.0
         self._cap_count = 0
         self._cap_t0 = time.time()
         threading.Thread(target=self._loop, daemon=True).start()
@@ -43,12 +44,13 @@ class _CameraReader:
         while not self._stop.is_set():
             with self._cap_lock:
                 ret, frame = self._cap.read()
+            capture_time = time.perf_counter()
             if ret:
                 h, w = frame.shape[:2]
                 small = cv.resize(frame, (w // PREVIEW_SCALE, h // PREVIEW_SCALE))
                 preview = cv.cvtColor(small, cv.COLOR_BGR2RGB)
                 with self._lock:
-                    self._ret, self._frame, self._preview = ret, frame, preview
+                    self._ret, self._frame, self._preview, self._capture_time = ret, frame, preview, capture_time
                 self._cap_count += 1
                 elapsed = time.time() - self._cap_t0
                 if elapsed >= 2.0:
@@ -62,7 +64,7 @@ class _CameraReader:
 
     def read(self):
         with self._lock:
-            return self._ret, self._frame
+            return self._ret, self._frame, self._capture_time
 
     def read_preview(self):
         with self._lock:
@@ -374,14 +376,15 @@ class Controller:
             return
 
         t0 = time.perf_counter()
-        ret0, frame0 = self.cam0.read()
+        ret0, frame0, t0_capture = self.cam0.read()
         t1 = time.perf_counter()
-        ret1, frame1 = self.cam1.read()
+        ret1, frame1, t1_capture = self.cam1.read()
         t2 = time.perf_counter()
-        
+        sync_diff_ms = abs(t0_capture - t1_capture) * 1000
         self.perf.record(
             cam0_read_ms = (t1 - t0) * 1000,
             cam1_read_ms = (t2 - t1) * 1000,
+            sync_diff_ms = sync_diff_ms,
         )
         
         if self._recording and self._writer0 and self._writer1:
