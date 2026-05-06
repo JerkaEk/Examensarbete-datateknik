@@ -26,7 +26,7 @@ class _CameraReader:
       - _preview: half-resolution RGB numpy for the GUI preview
     Heavy work (resize + cvtColor) happens here, not in the GUI thread.
     """
-    def __init__(self, cap):
+    def __init__(self, cap, is_video: bool = False):
         self._cap = cap
         self._frame = None
         self._preview = None
@@ -39,9 +39,13 @@ class _CameraReader:
         self._cap_count = 0
         self._cap_t0 = time.time()
         self._frame_version=0
-        fps = cap.get(cv.CAP_PROP_FPS)
-        log.debug(f"Camera reported FPS: {fps}")
-        self._frame_interval = 1.0 / fps if fps > 0 else 0.0
+        # Frame pacing is only needed for video files. For live cameras cap.read()
+        # already blocks until the hardware delivers the next frame.
+        if is_video:
+            fps = cap.get(cv.CAP_PROP_FPS)
+            self._frame_interval = 1.0 / fps if fps > 0 else 0.0
+        else:
+            self._frame_interval = 0.0
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
@@ -326,8 +330,10 @@ class Controller:
         settings = load_yaml(CALIBRATION_SETTINGS_PATH)
         w = settings.get("frame_width", 640)
         h = settings.get("frame_height", 360)
-        
-        if self.mode == "video":
+        fps = settings.get("frame_fps", 120)
+
+        is_video = self.mode == "video"
+        if is_video:
             cam0_id = self.video0_path
             cam1_id = self.video1_path
         else:
@@ -335,15 +341,15 @@ class Controller:
             cam1_id = self.cam1_id
 
         log.info(f"Opening: {cam0_id}, {cam1_id}")
-        cap0 = open_camera(cam0_id, width=w, height=h)
-        cap1 = open_camera(cam1_id, width=w, height=h)
+        cap0 = open_camera(cam0_id, width=w, height=h, fps=fps)
+        cap1 = open_camera(cam1_id, width=w, height=h, fps=fps)
 
         if not cap0 or not cap1:
             log.error("Could not open cameras/videos")
             return
 
-        self.cam0 = _CameraReader(cap0)
-        self.cam1 = _CameraReader(cap1)
+        self.cam0 = _CameraReader(cap0, is_video=is_video)
+        self.cam1 = _CameraReader(cap1, is_video=is_video)
         self.preview_active = True
         self._frame_queue = queue.Queue(maxsize=2)
         self._fps_count = 0

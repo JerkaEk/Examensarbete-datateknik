@@ -38,12 +38,12 @@ class PiCameraCapture:
     
 
 # Dynamic camera selection. Uses default witdth/height if no parameters are provided
-def open_camera(camera_id, width=1920, height=1080):
+def open_camera(camera_id, width=1920, height=1080, fps=120):
   """
   Try cv.VideoCapture first (USB) with PiCameraCapture as fallback(CSI).
   Returns a camera object with read() and release() interface.
   """
-  # Video file
+  # Video file — don't apply resolution/fps settings
   if isinstance(camera_id, str) and camera_id.endswith((".mp4", ".avi", ".mkv")):
         cap = cv.VideoCapture(camera_id)
         if cap.isOpened():
@@ -51,44 +51,44 @@ def open_camera(camera_id, width=1920, height=1080):
             return cap
         log.error(f"Could not open video file: {camera_id}")
         return None
-  
-    # Linux - Check if USB camera
-  if isinstance(camera_id, str) and (camera_id.startswith("/dev/video")):
+
+  # Linux — USB camera
+  if isinstance(camera_id, str) and camera_id.startswith("/dev/video"):
     cap = cv.VideoCapture(camera_id)
     if cap.isOpened():
       cap.set(cv.CAP_PROP_FRAME_WIDTH, width)
       cap.set(cv.CAP_PROP_FRAME_HEIGHT, height)
+      cap.set(cv.CAP_PROP_FPS, fps)
       actual_w = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
       actual_h = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-      log.info(f"Opened USB Camera {camera_id} at {actual_w}x{actual_h}")
+      actual_fps = cap.get(cv.CAP_PROP_FPS)
+      log.info(f"Opened USB Camera {camera_id} at {actual_w}x{actual_h} {actual_fps:.0f}fps")
       return cap
 
-  # Windows - Check if USB camera
+  # Windows — USB camera
   if isinstance(camera_id, int) and not HAS_PICAMERA:
         cap = cv.VideoCapture(camera_id)
         if cap.isOpened():
             cap.set(cv.CAP_PROP_FRAME_WIDTH, width)
             cap.set(cv.CAP_PROP_FRAME_HEIGHT, height)
+            cap.set(cv.CAP_PROP_FPS, fps)
             actual_w = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
             actual_h = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-            log.info(f"Opened camera index {camera_id} at {actual_w}x{actual_h}")
+            actual_fps = cap.get(cv.CAP_PROP_FPS)
+            log.info(f"Opened camera index {camera_id} at {actual_w}x{actual_h} {actual_fps:.0f}fps")
             return cap
         log.error(f"Could not open camera index {camera_id}")
         return None
-  
-  # Fallback to PiCam(CSI)
+
+  # Fallback — CSI camera via PiCameraCapture
   if isinstance(camera_id, int):
     if not HAS_PICAMERA:
         log.warning("picamera2 not available, cannot open CSI camera")
         return None
     try:
-        # Open PiCamera with specified resolution
-        cap = PiCameraCapture(camera_id)
+        cap = PiCameraCapture(camera_id, width=width, height=height)
+        log.info(f"Opened CSI camera {camera_id} at {width}x{height}")
         return cap
     except Exception as e:
         log.error(f"PiCamera failed: {e}")
     sys.exit(f"[ERROR] could not open camera: {camera_id}")
-
-
-
-
