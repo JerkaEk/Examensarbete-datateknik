@@ -34,55 +34,62 @@ class _CameraReader:
         self._lock = threading.Lock()
         self._cap_lock = threading.Lock()
         self._stop = threading.Event()
+        self._capture_fps = 0.0
+        self._capture_time = 0.0
+        self._cap_count = 0
+        self._cap_t0 = time.time()
+        self._frame_version=0
+        fps = cap.get(cv.CAP_PROP_FPS)
+        self._frame_interval = 1.0 / fps if fps > 0 else 0.0
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
-    while not self._stop.is_set():
-        try:
-            t = time.time()
+        while not self._stop.is_set():
+            try:
+                t = time.time()
 
-            with self._cap_lock:
-                ret, frame = self._cap.read()
+                with self._cap_lock:
+                    ret, frame = self._cap.read()
 
-            capture_time = time.perf_counter()
+                capture_time = time.perf_counter()
 
-            if ret:
-                h, w = frame.shape[:2]
-                small = cv.resize(frame, (w // PREVIEW_SCALE, h // PREVIEW_SCALE))
+                if ret:
+                    h, w = frame.shape[:2]
+                    small = cv.resize(frame, (w // PREVIEW_SCALE, h // PREVIEW_SCALE))
 
-                if small.ndim == 2:
-                    preview = cv.cvtColor(small, cv.COLOR_GRAY2RGB)
+                    if small.ndim == 2:
+                        preview = cv.cvtColor(small, cv.COLOR_GRAY2RGB)
+                    else:
+                        preview = cv.cvtColor(small, cv.COLOR_BGR2RGB)
+
+                    with self._lock:
+                        self._ret = True
+                        self._frame = frame
+                        self._preview = preview
+                        self._capture_time = capture_time
+                        self._frame_version += 1
+
+                    # FPS (only valid frames)
+                    self._cap_count += 1
+                    elapsed_fps = time.time() - self._cap_t0
+                    if elapsed_fps >= 2.0:
+                        self._capture_fps = self._cap_count / elapsed_fps
+                        self._cap_count = 0
+                        self._cap_t0 = time.time()
+
+                    # Frame pacing
+                    elapsed = time.time() - t
+                    wait = self._frame_interval - elapsed
+                    if wait > 0:
+                        time.sleep(wait)
+
                 else:
-                    preview = cv.cvtColor(small, cv.COLOR_BGR2RGB)
+                    with self._lock:
+                        self._ret = False
+                    time.sleep(0.01)  # avoid busy loop
 
-                with self._lock:
-                    self._ret = True
-                    self._frame = frame
-                    self._preview = preview
-                    self._capture_time = capture_time
-                    self._frame_version += 1
-
-                # FPS (only valid frames)
-                self._cap_count += 1
-                elapsed_fps = time.time() - self._cap_t0
-                if elapsed_fps >= 2.0:
-                    self._capture_fps = self._cap_count / elapsed_fps
-                    self._cap_count = 0
-                    self._cap_t0 = time.time()
-
-                # Frame pacing
-                elapsed = time.time() - t
-                wait = self._frame_interval - elapsed
-                if wait > 0:
-                    time.sleep(wait)
-
-            else:
-                with self._lock:
-                    self._ret = False
-                time.sleep(0.01)  # avoid busy loop
-
-        except Exception:
-            log.exception("_CameraReader loop error")
+            except Exception:
+                log.exception("_CameraReader loop error")
 
     @property
     def capture_fps(self) -> float:
@@ -409,11 +416,12 @@ class Controller:
             return
 
         t0 = time.perf_counter()
-        ret0, frame0, ver0, t0_capture = self.cam0.read()
+        ret0, frame0, t0_capture, ver0 = self.cam0.read()
         t1 = time.perf_counter()
-        ret1, frame1, ver1, t1_capture = self.cam1.read()
+        ret1, frame1, t1_capture, ver1 = self.cam1.read()
         t2 = time.perf_counter()
         sync_diff_ms = abs(t0_capture - t1_capture) * 1000
+        
         self.perf.record(
             cam0_read_ms = (t1 - t0) * 1000,
             cam1_read_ms = (t2 - t1) * 1000,
@@ -428,10 +436,6 @@ class Controller:
         self._last_frame_version1 = ver1
         
         if frame0 is None or frame1 is None:
-            self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
-            return
-        
-        if ver0 == self._last_frame_version0 and ver1 == self._last_frame_version1:
             self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
             return
         
