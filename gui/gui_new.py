@@ -427,50 +427,25 @@ class MainWindow(ctk.CTk):
         fill="x", padx=16, pady=(0, 12)
     )
 
-    # Cam 0
     ctk.CTkLabel(
         self.video_settings_panel,
-        text="Video cam 0",
+        text="Recording folder",
         font=ctk.CTkFont(size=12),
     ).pack(padx=16, anchor="w")
 
-    self.video0_var = ctk.StringVar(value="No file selected")
-    self.video0_label = ctk.CTkLabel(
-        self.video_settings_panel,
-        textvariable=self.video0_var,
-        text_color="gray50",
-        font=ctk.CTkFont(size=11),
-        wraplength=SETTINGS_PANEL_WIDTH - 40,
-    )
-    self.video0_label.pack(padx=16, anchor="w")
-
-    ctk.CTkButton(
-        self.video_settings_panel,
-        text="Browse",
-        command=lambda: self._on_browse_video(0),
-    ).pack(padx=16, pady=(4, 12), fill="x")
-
-    # Cam 1
+    self.video_folder_var = ctk.StringVar(value="No folder selected")
     ctk.CTkLabel(
         self.video_settings_panel,
-        text="Video cam 1",
-        font=ctk.CTkFont(size=12),
-    ).pack(padx=16, anchor="w")
-
-    self.video1_var = ctk.StringVar(value="No file selected")
-    self.video1_label = ctk.CTkLabel(
-        self.video_settings_panel,
-        textvariable=self.video1_var,
+        textvariable=self.video_folder_var,
         text_color="gray50",
         font=ctk.CTkFont(size=11),
         wraplength=SETTINGS_PANEL_WIDTH - 40,
-    )
-    self.video1_label.pack(padx=16, anchor="w")
+    ).pack(padx=16, anchor="w")
 
     ctk.CTkButton(
         self.video_settings_panel,
-        text="Browse",
-        command=lambda: self._on_browse_video(1),
+        text="Browse folder",
+        command=self._on_browse_recording_folder,
     ).pack(padx=16, pady=(4, 0), fill="x")
 
     ctk.CTkFrame(self.video_settings_panel, height=1, fg_color="gray30").pack(
@@ -724,31 +699,34 @@ class MainWindow(ctk.CTk):
         self._build_video_settings_panel()
         self._video_settings_built = True
     self._set_panel(self.video_settings_panel, self._video_settings_panel_open)
-    self._update_rec_buttons()
+    # self._update_rec_buttons() DELETE
 
-  def _on_browse_video(self, cam_index: int):
+  def _on_browse_recording_folder(self):
     from tkinter import filedialog
-    path = filedialog.askopenfilename(
-      filetypes=[("Video files", "*.mp4 *.avi *.mkv")]
-    )
-    if path:
-      if cam_index == 0:
-        self.video0_var.set(path)
-      else:
-        self.video1_var.set(path)
+    folder = filedialog.askdirectory(initialdir="recordings")
+    if not folder:
+      return
+    cam0 = os.path.join(folder, "cam0.avi")
+    cam1 = os.path.join(folder, "cam1.avi")
+    missing = [f for f in (cam0, cam1) if not os.path.exists(f)]
+    if missing:
+      self.video_folder_var.set("Missing: " + ", ".join(os.path.basename(f) for f in missing))
+      return
+    self.video_folder_var.set(os.path.basename(folder))
+    self._selected_video0 = cam0
+    self._selected_video1 = cam1
 
   def _on_video_play(self):
-    path0 = self.video0_var.get()
-    path1 = self.video1_var.get()
-    if path0 == "No file selected" or path1 == "No file selected":
-      # TODO: visa felmeddelande
+    path0 = getattr(self, "_selected_video0", None)
+    path1 = getattr(self, "_selected_video1", None)
+    if not path0 or not path1:
       return
     self.controller.on_video_paths_saved(path0, path1)
 
   def _on_switch_to_camera_mode(self):
     self._video_settings_panel_open = False
     self._set_panel(self.video_settings_panel, False)
-    self._update_rec_buttons()
+    # self._update_rec_buttons() DELETE
     self.controller.on_switch_to_camera_mode()
     
   def _on_toggle_estimation(self):
