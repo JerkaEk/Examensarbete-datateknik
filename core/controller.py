@@ -13,7 +13,7 @@ from datetime import datetime
 
 log = logging.getLogger(__name__)
 
-PREVIEW_INTERVAL_MS = 1
+PREVIEW_INTERVAL_MS = 16
 PREVIEW_SCALE = 2  # Downsample factor for preview frames (pre-processed in reader thread)
 CALIBRATION_SETTINGS_PATH = "calibration/calibration_settings.yaml"
 
@@ -34,26 +34,45 @@ class _CameraReader:
         self._lock = threading.Lock()
         self._cap_lock = threading.Lock()
         self._stop = threading.Event()
+        self._frame_version=0
+        fps = cap.get(cv.CAP_PROP_FPS)
+        self._frame_interval = 1.0 / fps if fps > 0 else 0.0
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
         while not self._stop.is_set():
-            with self._cap_lock:
-                ret, frame = self._cap.read()
-            if ret:
-                h, w = frame.shape[:2]
-                small = cv.resize(frame, (w // PREVIEW_SCALE, h // PREVIEW_SCALE))
-                preview = cv.cvtColor(small, cv.COLOR_BGR2RGB)
-                with self._lock:
-                    self._ret, self._frame, self._preview = ret, frame, preview
+            try:
+                t = time.time()
+                with self._cap_lock:
+                    ret, frame = self._cap.read()
+                if ret:
+                    h, w = frame.shape[:2]
+                    small = cv.resize(frame, (w // PREVIEW_SCALE, h // PREVIEW_SCALE))
+                    if small.ndim == 2:
+                        preview = cv.cvtColor(small, cv.COLOR_GRAY2RGB)
+                    else:
+                        preview = cv.cvtColor(small, cv.COLOR_BGR2RGB)
+                    with self._lock:
+                        self._ret, self._frame, self._preview = ret, frame, preview
+                        self._frame_version += 1
+                    elapsed = time.time() - t
+                    wait = self._frame_interval - elapsed
+                    if wait > 0:
+                        time.sleep(wait)
+                else:
+                    with self._lock:
+                        self._ret = False
+                    time.sleep(0.01)  # avoid busy loop
+            except Exception:
+                log.exception("_CameraReader loop error")
 
     def read(self):
         with self._lock:
-            return self._ret, self._frame
+            return self._ret, self._frame, self._frame_version
 
     def read_preview(self):
         with self._lock:
-            return self._preview
+            return self._preview, self._frame_version
 
     def get(self, prop):
         with self._cap_lock:
@@ -95,6 +114,11 @@ class Controller:
         # Video
         self.video0_path = None
         self.video1_path = None
+        
+        self._last_frame_version0 = -1
+        self._last_frame_version1 = -1
+        self._last_preview_version0 = -1
+        self._last_preview_version1 = -1
         
         # Recording
         self._writer0 = None
@@ -300,7 +324,9 @@ class Controller:
 
         self._model_thread = threading.Thread(target=self._model_loop, daemon=True)
         self._model_thread.start()
-        self._poll_frames()
+        # Give the reader threads time to grab the first frame before polling starts.
+        # Without this, video files trigger an immediate "video ended" on the first poll.
+        self.gui.after(100, self._poll_frames)
 
     def _model_loop(self):
         model_fps_count = 0
@@ -362,9 +388,9 @@ class Controller:
             return
 
         t0 = time.perf_counter()
-        ret0, frame0 = self.cam0.read()
+        ret0, frame0, ver0 = self.cam0.read()
         t1 = time.perf_counter()
-        ret1, frame1 = self.cam1.read()
+        ret1, frame1, ver1 = self.cam1.read()
         t2 = time.perf_counter()
         
         self.perf.record(
@@ -372,9 +398,22 @@ class Controller:
             cam1_read_ms = (t2 - t1) * 1000,
         )
         
+        if ver0 == self._last_frame_version0 and ver1 == self._last_frame_version1:
+            self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
+            return
+        
+        self._last_frame_version0 = ver0
+        self._last_frame_version1 = ver1
+        
+        if frame0 is None or frame1 is None:
+            self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
+            return
+        
         if self._recording and self._writer0 and self._writer1:
-            self._writer0.write(frame0)
-            self._writer1.write(frame1)
+            f0 = frame0 if frame0.ndim == 3 else cv.cvtColor(frame0, cv.COLOR_GRAY2BGR)
+            f1 = frame1 if frame1.ndim == 3 else cv.cvtColor(frame1, cv.COLOR_GRAY2BGR)
+            self._writer0.write(f0)
+            self._writer1.write(f1)
                 
         if not ret0 or not ret1:
             if self.mode == "video":
@@ -402,14 +441,16 @@ class Controller:
         except queue.Full:
             pass
         if self._show_preview:
-            prev0 = self.cam0.read_preview()
-            prev1 = self.cam1.read_preview()
-            if prev0 is not None:
+            prev0, pver0 = self.cam0.read_preview()
+            prev1, pver1 = self.cam1.read_preview()
+            if prev0 is not None and pver0 != self._last_preview_version0:
                 self.gui.update_cam0(prev0)
-            if prev1 is not None:
+                self._last_preview_version0 = pver0
+            if prev1 is not None and pver1 != self._last_preview_version1:
                 self.gui.update_cam1(prev1)
+                self._last_preview_version1 = pver1
 
-        self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)
+        self.gui.after(PREVIEW_INTERVAL_MS, self._poll_frames)  
     
     def _start_gui(self):
         """Create and launch the main window."""

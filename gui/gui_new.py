@@ -634,7 +634,7 @@ class MainWindow(ctk.CTk):
         self._build_video_settings_panel()
         self._video_settings_built = True
     self._set_panel(self.video_settings_panel, self._video_settings_panel_open)
-    self._update_rec_buttons()
+    # self._update_rec_buttons() DELETE
 
   def _on_browse_recording_folder(self):
     from tkinter import filedialog
@@ -661,7 +661,7 @@ class MainWindow(ctk.CTk):
   def _on_switch_to_camera_mode(self):
     self._video_settings_panel_open = False
     self._set_panel(self.video_settings_panel, False)
-    self._update_rec_buttons()
+    # self._update_rec_buttons() DELETE
     self.controller.on_switch_to_camera_mode()
     
   def _on_toggle_estimation(self):
