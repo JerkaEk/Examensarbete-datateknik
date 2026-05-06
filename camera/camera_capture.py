@@ -52,19 +52,26 @@ def open_camera(camera_id, width=1920, height=1080):
         log.error(f"Could not open video file: {camera_id}")
         return None
   
-  # Linux - Check if USB camera
+    # Linux - Check if USB camera
   if isinstance(camera_id, str) and (camera_id.startswith("/dev/video")):
-    # Try to open with OpenCV
     cap = cv.VideoCapture(camera_id)
     if cap.isOpened():
-      log.info(f"Opened USB Camera {camera_id}")
+      cap.set(cv.CAP_PROP_FRAME_WIDTH, width)
+      cap.set(cv.CAP_PROP_FRAME_HEIGHT, height)
+      actual_w = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+      actual_h = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+      log.info(f"Opened USB Camera {camera_id} at {actual_w}x{actual_h}")
       return cap
-  
+
   # Windows - Check if USB camera
   if isinstance(camera_id, int) and not HAS_PICAMERA:
         cap = cv.VideoCapture(camera_id)
         if cap.isOpened():
-            log.info(f"Opened camera index {camera_id}")
+            cap.set(cv.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv.CAP_PROP_FRAME_HEIGHT, height)
+            actual_w = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+            actual_h = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+            log.info(f"Opened camera index {camera_id} at {actual_w}x{actual_h}")
             return cap
         log.error(f"Could not open camera index {camera_id}")
         return None
