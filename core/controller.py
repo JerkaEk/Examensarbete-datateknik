@@ -40,6 +40,7 @@ class _CameraReader:
         self._cap_t0 = time.time()
         self._frame_version=0
         fps = cap.get(cv.CAP_PROP_FPS)
+        log.debug(f"Camera reported FPS: {fps}")
         self._frame_interval = 1.0 / fps if fps > 0 else 0.0
         threading.Thread(target=self._loop, daemon=True).start()
 
