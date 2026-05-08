@@ -269,11 +269,12 @@ class Controller:
         h0 = int(self.cam0.get(cv.CAP_PROP_FRAME_HEIGHT))
         w1 = int(self.cam1.get(cv.CAP_PROP_FRAME_WIDTH))
         h1 = int(self.cam1.get(cv.CAP_PROP_FRAME_HEIGHT))
-        
+        fps = self._poll_fps
+
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self._writer0, self._writer1 = create_video_writers(timestamp, (w0, h0), (w1, h1))
+        self._writer0, self._writer1 = create_video_writers(timestamp, (w0, h0), (w1, h1), fps=fps)
         self._recording = True
-        log.info(f"Recording started: {timestamp}")
+        log.info(f"Recording started: {timestamp} @ {fps:.0f}fps")
         
     def stop_recording(self):
         """Stop recording and release writers."""
@@ -355,6 +356,8 @@ class Controller:
         self._fps_count = 0
         self._fps_t0 = time.time()
         self._last_model_fps = 0
+
+        self._poll_fps = 30.0  # updated once per 2s; used as VideoWriter FPS
 
         self._model_thread = threading.Thread(target=self._model_loop, daemon=True)
         self._model_thread.start()
@@ -475,6 +478,7 @@ class Controller:
         elapsed = time.time() - self._fps_t0
         if elapsed >= 2.0:
             poll_fps = self._fps_count / elapsed
+            self._poll_fps = poll_fps
             log.info(f"Poll FPS: {poll_fps:.1f}")
             self.gui.update_fps(poll_fps, self._last_model_fps)
             self.perf.record(

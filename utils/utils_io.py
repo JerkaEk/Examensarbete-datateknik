@@ -110,11 +110,11 @@ def append_csv_row(writer: csv.writer, row: list) -> None:
     """Append a single row to an already-open CSV writer."""
     writer.writerow(row)
     
-def create_video_writers(timestamp: str, size0: tuple, size1: tuple):
+def create_video_writers(timestamp: str, size0: tuple, size1: tuple, fps: float = 30):
     """Create VideoWriter objects for both cameras in a timestamped subfolder."""
     folder = os.path.join("recordings", timestamp)
     os.makedirs(folder, exist_ok=True)
     fourcc = cv.VideoWriter_fourcc(*"XVID")
-    writer0 = cv.VideoWriter(os.path.join(folder, "cam0.avi"), fourcc, 30, size0)
-    writer1 = cv.VideoWriter(os.path.join(folder, "cam1.avi"), fourcc, 30, size1)
+    writer0 = cv.VideoWriter(os.path.join(folder, "cam0.avi"), fourcc, fps, size0)
+    writer1 = cv.VideoWriter(os.path.join(folder, "cam1.avi"), fourcc, fps, size1)
     return writer0, writer1
