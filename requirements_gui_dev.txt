@@ -1,6 +1,0 @@
-customtkinter
-opencv-python
-mediapipe
-numpy
-pillow
-matplotlib
