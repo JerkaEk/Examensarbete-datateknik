@@ -106,11 +106,11 @@ Both MediaPipe (33 landmarks) and MoveNet (17 landmarks) are mapped to share a 1
 
 ## Known limitations
 - MediaPipe GPU delegate is not supported on Windows and Raspberry Pi 5 doesn't have a GPU for accelerated processing.
-- ````matplotlib``` canvas redraws every frame regardless of detection.
+- ```matplotlib``` canvas redraws every frame regardless of detection.
 - The system only supports estimation of one person in frame.
 
 ## Credits
 This project is based on [Stereo-3D-Skeleton-Tracker](https://github.com/ranagursoy/Stereo-3D-Skeleton-Tracker) by ranagursoy.
 
 ## License
-TBA
+MIT [LICENSE](LICENSE)
