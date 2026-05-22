@@ -102,4 +102,4 @@ def process(pose_json: Path, out_json: Path, tri: Triangulator) -> None:
         pts3d_all.extend(pts3d.tolist())
 
     save_json({"points_3d": pts3d_all}, out_json)
-    print(f"[3-D] saved → {out_json}")
+    log.info(f"3D points saved -> {out_json}")

@@ -77,7 +77,7 @@ def load_settings(file_name: str) -> None:
 
 
 # Geometry utilities
-def dlt_triangulate(    # TODO: move this to triangulate?
+def dlt_triangulate(
     P1: np.ndarray, P2: np.ndarray, p1: np.ndarray, p2: np.ndarray
 ) -> np.ndarray:
     """Triangulate a 3D point from two projection matrices and corresponding 2D points using DLT."""
@@ -409,7 +409,7 @@ def run_calibration(settings_path: str = "calibration_settings.yaml") -> bool:
         log.error(f"Could not read settings: {e}")
         return False
     try:
-        # cature frames on each camrea
+        # capture frames on each camera
         capture_single_camera("camera0")
         capture_single_camera("camera1")
         # compute intrinsics for camera0 and save
@@ -418,7 +418,7 @@ def run_calibration(settings_path: str = "calibration_settings.yaml") -> bool:
         # compute intrinsics for camera1 and save
         K1, d1 = calibrate_intrinsics("camera/frames/camera1*")
         save_intrinsics(K1, d1, "camera1")
-        # cature stereo pairs for extrinsic calibration
+        # capture stereo pairs for extrinsic calibration
         capture_stereo_pair("camera0", "camera1")
         # compute extrinsics and save
         R01, t01 = stereo_calibrate(
