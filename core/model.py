@@ -14,7 +14,7 @@ from collections import deque
 
 log = logging.getLogger(__name__)
 
-from pose_estimation.pose2d_extractor import Pose2DEstimator as _Estimator
+from pose_estimation.mediapipe_estimator import Pose2DEstimator as _Estimator
 _ESTIMATOR_KWARGS: dict = {"model_complexity": 0}
 # from pose_estimation.movenet_estimator import MoveNetEstimator as _Estimator
 # _ESTIMATOR_KWARGS: dict = {"variant": "lightning"}

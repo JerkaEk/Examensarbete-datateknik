@@ -1,14 +1,14 @@
 from __future__ import annotations
 """
-pose2d_extractor.py
-===================
+mediapipe_estimator.py
+======================
 
 Extract 2-D landmarks from *two* synchronized videos (or dual-lens footage)
 and store per-frame landmarks in a single JSON file.
 
 Example
 -------
-$ python pose2d_extractor.py --v0 cam0.mp4 --v1 cam1.mp4 --out pose2d.json
+$ python mediapipe_estimator.py --v0 cam0.mp4 --v1 cam1.mp4 --out pose2d.json
 """
 import argparse
 import logging

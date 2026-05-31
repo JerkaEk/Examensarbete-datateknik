@@ -170,14 +170,6 @@ class MainWindow(ctk.CTk):
     self.canvas.draw()
     self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
-    self.plot_fps_label = ctk.CTkLabel(
-        self.plot_frame,
-        text="-- fps",
-        text_color="gray50",
-        font=ctk.CTkFont(size=11),
-    )
-    self.plot_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
-
     self.btn_reset_view = ctk.CTkButton(
         self.plot_frame,
         text="Reset view",
@@ -208,14 +200,6 @@ class MainWindow(ctk.CTk):
     
     self.cam0_label.place(relx=0.5, rely=0.5, anchor="center")
     
-    self.cam0_fps_label = ctk.CTkLabel(     
-        self.cam0_frame,
-        text="-- fps",
-        text_color="gray50",
-        font=ctk.CTkFont(size=11),
-    )
-    self.cam0_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
-    
     # Cam 1
     self.cam1_frame = ctk.CTkFrame(self.camera_column)
     self.cam1_frame.pack(side="top", fill="both", expand=True, pady=(4, 0))
@@ -226,14 +210,6 @@ class MainWindow(ctk.CTk):
       text_color="gray50",
       font=ctk.CTkFont(size=14),
     )
-    
-    self.cam1_fps_label = ctk.CTkLabel(    
-        self.cam1_frame,
-        text="-- fps",
-        text_color="gray50",
-        font=ctk.CTkFont(size=11),
-    )
-    self.cam1_fps_label.place(relx=1.0, rely=0.0, anchor="ne", x=-8, y=8)
     
     self.cam1_label.place(relx=0.5, rely=0.5, anchor="center")
     
@@ -857,12 +833,6 @@ class MainWindow(ctk.CTk):
       text = f"{name}: {val:.1f}°" if val is not None else f"{name}: --"
       lbl.configure(text=text)
 
-  def update_fps(self, poll_fps: float, model_fps: float):
-    """Display live FPS on camera previews and 3D plot."""
-    self.cam0_fps_label.configure(text=f"{poll_fps:.0f} fps")
-    self.cam1_fps_label.configure(text=f"{poll_fps:.0f} fps")
-    self.plot_fps_label.configure(text=f"{model_fps:.0f} fps")
-    
   def populate_settings(self, values: dict):
     """Populate calibration settings fields with values from a dict."""
     for setting in CALIBRATION_SETTINGS:

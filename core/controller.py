@@ -480,7 +480,6 @@ class Controller:
             poll_fps = self._fps_count / elapsed
             self._poll_fps = poll_fps
             log.info(f"Poll FPS: {poll_fps:.1f}")
-            self.gui.update_fps(poll_fps, self._last_model_fps)
             self.perf.record(
                 poll_fps=poll_fps,
                 cam0_capture_fps=self.cam0.capture_fps,
@@ -507,7 +506,7 @@ class Controller:
     
     def _start_gui(self):
         """Create and launch the main window."""
-        from gui.gui_new import MainWindow
+        from gui.gui import MainWindow
         self.gui = MainWindow(controller=self)
         if self.model.triangulator is not None:
             self.gui.show_calibration_status("Cameras calibrated")
