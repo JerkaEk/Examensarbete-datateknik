@@ -5,8 +5,12 @@ This was a part of a bachelor's thesis in computer engineering.
 
 **Status:** Active development - feasibility study
 
+![alt text](https://github.com/JerkaEk/Examensarbete-datateknik/blob/main/docs/images/demo.png "Demo")
+
 ## Overview
 The system implements a complete pipeline that captures synchronized videos from two cameras, runs 2D estimation on each frame independently, then triangulates the results into 3D coordinates. A live GUI displays both camera views and an interactive 3D skeleton plot with joint angles.
+
+![alt text](https://github.com/JerkaEk/Examensarbete-datateknik/blob/main/docs/images/system_overview.png "System overview")
 
 ## Hardware
 - Raspberry Pi 5 8GB
